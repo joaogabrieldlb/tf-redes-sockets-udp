@@ -1,5 +1,7 @@
 package main.java.server;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -12,32 +14,41 @@ public class Server
     private final int port;
     private DatagramSocket socket = null;
     private FileInfo file = null;
+    private long sequence = 0;
 
     public Server(int port) throws InvalidParameterException
     {
-        if(port < 0)
+        if(port < 0 || port > 65536)
         {
-            throw new InvalidParameterException();
+            throw new InvalidParameterException("Porta deve estar entre 0 e 65536.");
         }
         this.port = port;
     }
 
     public void createAndListenSocket()
     {
-        /*
+        byte[] incomingData = new byte[512];
+        byte[] sendData = new byte[512];
         try
         {
             socket = new DatagramSocket(port);
             System.out.println("Server is listening on port " + port);
-            byte[] incomingData = new byte[512];
             while(true)
             {
-                DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
-                socket.receive(incomingPacket);
-                byte[] data = incomingPacket.getData();
-                ByteArrayInputStream in = new ByteArrayInputStream(data);
-                ObjectInputStream is = new ObjectInputStream(in);
-                file = (FileInfo) is.readObject();
+                DatagramPacket receivePacket = new DatagramPacket(incomingData, incomingData.length);
+                DatagramPacket sendPackage = new DatagramPacket(sendData, sendData.length, receivePacket.getAddress(), receivePacket.getPort());
+                socket.receive(receivePacket);
+
+                String message = new String(receivePacket.getData());
+                if (!message.equals("SYN"))
+                {
+                    break;
+                }
+
+                sendPackage.setData(buf, offset, length);
+
+                byte[] data = receivePacket.getData();
+                file = (FileInfo) convertToObject(data);
                 System.out.println("Received file: " + file.getFileName());
                 System.out.println("Saving file to: " + file.getDestinationDirectory());
             }
@@ -53,7 +64,20 @@ public class Server
                 socket.close();
             }
         }
-        */
+    }
+
+    private Object convertToObject(byte[] bytes)
+    {
+        InputStream is = new ByteArrayInputStream(bytes);
+		try (ObjectInputStream ois = new ObjectInputStream(is))
+        {
+			return ois.readObject();
+		}
+        catch (IOException | ClassNotFoundException ioe) 
+        {
+			ioe.printStackTrace();	
+			return null;
+		}
     }
 
     public static void main(String[] args) throws Exception 

@@ -46,4 +46,7 @@ hs_err_pid*
 # Support for Project snippet scope
 !.vscode/*.code-snippets
 
+# Code support
+# examples/*
+
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,java
