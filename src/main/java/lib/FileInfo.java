@@ -1,4 +1,4 @@
-package main.java;
+package main.java.lib;
 import java.io.Serializable;
 
 public class FileInfo implements Serializable

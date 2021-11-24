@@ -4,6 +4,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 
+import main.java.lib.Message;
+
 public class Client
 {
     // long lastSendRate = Long.MAX_VALUE;
@@ -15,7 +17,7 @@ public class Client
     //      if (conection timeout)
     //          lastSendRate = sendRate;
 
-    private byte[] convertObjectToBytes(Object object)
+    private static byte[] convertObjectToBytes(Object object)
     {
         ByteArrayOutputStream boas = new ByteArrayOutputStream();
 		try (ObjectOutputStream ois = new ObjectOutputStream(boas))
@@ -32,6 +34,9 @@ public class Client
 
     public static void main(String[] args)
     {
-
+        // char[] chars = "ab".toCharArray();
+        // var msg = new Message(chars, 1, null);
+        // var byteArray = convertObjectToBytes(msg);
+        // System.out.println(byteArray.length);
     }
 }
