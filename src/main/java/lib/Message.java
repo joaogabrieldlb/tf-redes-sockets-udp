@@ -11,12 +11,15 @@ import java.io.Serializable;
 
 public class Message implements Serializable
 {
-    private enum CommandType { SYN, ACK, SYN_ACK, DATA, FIN };
+    static final int PAYLOAD_SIZE = 512;
+
+    public enum CommandType { SYN, ACK, SYN_ACK, RST, FIN, UPLOAD, DOWNLOAD, DATA, CHECKSUM, TIMEOUT };
+
     private CommandType command;
     private long sequence;
-    private byte[] data;
+    private byte[] data = new byte[PAYLOAD_SIZE];
     
-    public Message(CommandType command, int sequence, byte[] data) 
+    public Message(CommandType command, int sequence, byte[] data)
     {
         this.command = command;
         this.sequence = sequence;
