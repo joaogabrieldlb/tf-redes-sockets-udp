@@ -8,51 +8,61 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 
+
 public class Message implements Serializable
 {
-    private char c;
-    private int s;
-    private String d;
+    private enum CommandType { SYN, ACK, SYN_ACK, DATA, FIN };
+    private CommandType command;
+    private long sequence;
+    private byte[] data;
     
-    public Message(char command, int sequence, String data) {
-        this.c = command;
-        this.s = sequence;
-        this.d = data;
+    public Message(CommandType command, int sequence, byte[] data) 
+    {
+        this.command = command;
+        this.sequence = sequence;
+        this.data = data;
     }
     
-    public char getCommand() {
-        return c;
+    public CommandType getCommand()
+    {
+        return command;
     }
 
-    public int getSequence() {
-        return s;
+    public long getSequence() 
+    {
+        return sequence;
     }
 
-    public String getData() {
-        return d;
+    public byte[] getData() 
+    {
+        return data;
     }
 
-	public static byte[] convertObjectToBytes(Message obj) {
+	public static byte[] convertObjectToBytes(Message obj) 
+    {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+		try (ObjectOutputStream oos = new ObjectOutputStream(baos)) 
+        {
 			oos.writeObject(obj);
-			
 			return baos.toByteArray();
-		} catch (IOException e) {
+		} 
+        catch (IOException e) 
+        {
 			e.printStackTrace();
-			
 			return null;
 		}
 	}
 
-    public static Message convertBytesToObject(byte[] bytes) {
+    public static Message convertBytesToObject(byte[] bytes) 
+    {
 		InputStream is = new ByteArrayInputStream(bytes);
-		try (ObjectInputStream ois = new ObjectInputStream(is)) {
-			
+		try (ObjectInputStream ois = new ObjectInputStream(is)) 
+        {
 			return (Message) ois.readObject();
-		} catch (IOException | ClassNotFoundException ioe) {
+		} 
+        catch (IOException | ClassNotFoundException ioe) 
+        {
 			ioe.printStackTrace();
-			
 			return null;
 		}
 	}
