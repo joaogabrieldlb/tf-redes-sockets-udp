@@ -1,10 +1,12 @@
 package main.java.server;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
+import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -105,7 +107,7 @@ public class Server
         }
     }
 
-    private void transferFile()
+    private void receiveFile()
     {
         Object data = receiveMessage.getData();
         FileInfo fileInfo;
@@ -117,8 +119,23 @@ public class Server
         }
         
         fileInfo = (FileInfo) ObjectConverter.convertBytesToObject(receiveMessage.getData());
-        int amountFragments = (int) fileInfo.fileSize / FILE_BUFFER_SIZE;
+        int amountFragments = (int) Math.ceil(fileInfo.fileSize / FILE_BUFFER_SIZE);
         String fileName = fileInfo.fileName;
+        
+    }
+
+    private void writeFileFragment(byte[] data, String fileName)
+    {
+        try (OutputStream os = new FileOutputStream(fileName))
+        {
+            byte[] buffer = new byte[FILE_BUFFER_SIZE];
+            buffer = data;
+            os.write(buffer);
+        }
+        catch(Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     private boolean establishedConnection() throws IOException
@@ -202,7 +219,6 @@ public class Server
         {
             e.printStackTrace();
         }
-        
     }
 
     private static void printHelp()
