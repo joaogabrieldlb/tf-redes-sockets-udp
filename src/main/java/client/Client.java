@@ -10,23 +10,35 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.security.InvalidParameterException;
 
-import main.java.lib.Message;
+import main.java.lib.*;
+import main.java.lib.Message.CommandType;
 
-public class Client
+public class Client 
 {
+    private final int SERVER_PORT;
+    private InetAddress serverIpAddress;
+    private String fileName;
+    private int sequence = 0;
     private DatagramSocket socket;
     private DatagramPacket receivePacket;
     private DatagramPacket sendPacket;
-    private String hostName = "localhost";
-    private final int SERVER_PORT;
+    private Message receiveMessage;
+    private Message sendMessage;
+    private byte[] receiveData = new byte[1024];
+    private byte[] sendData = new byte[1024];
 
-    public Client(int serverPort)
+    // private InetAddress clientAddress;
+    // private int clientPort;
+
+    public Client(String[] args) throws UnknownHostException
     {
-        if(serverPort < 0 || serverPort > 65536)
+        this.serverIpAddress = InetAddress.getByName(args[0]);
+        this.SERVER_PORT = Integer.parseInt(args[1]);
+        if(this.SERVER_PORT < 0 || this.SERVER_PORT > 65536)
         {
             throw new InvalidParameterException("Porta deve estar entre 0 e 65536.");
         }
-        SERVER_PORT = serverPort;
+        this.fileName = args[2];
     }
 
     // long lastSendRate = Long.MAX_VALUE;
@@ -40,18 +52,39 @@ public class Client
 
     public void createConnection()
     {
-        byte[] sendData = new byte[1024];
-        byte[] incomingData = new byte[1024];
         try
         {
             socket = new DatagramSocket();
-            InetAddress IPAddress = InetAddress.getByName(hostName);
-            sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, SERVER_PORT);
-            
-        }
-        catch (UnknownHostException e)
-        {
-            e.printStackTrace();
+            sendPacket = new DatagramPacket(sendData, sendData.length, serverIpAddress, SERVER_PORT);
+            sendMessage = new Message(CommandType.SYN, sequence);
+            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+            receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.receive(receivePacket);
+            receiveData = receivePacket.getData();
+            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+            if(receiveMessage.getCommand() == CommandType.SYN_ACK && receiveMessage.getSequence() == sequence)
+            {
+                System.out.println("Conexão do servidor recebida com sucesso.");
+                sequence = receiveMessage.getSequence();
+                sendMessage = new Message(CommandType.SYNACK, sequence);
+                sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+                sendPacket.setData(sendData);
+                socket.send(sendPacket);
+
+
+                sequence++;
+            }
+            else
+            {
+                System.out.println("Conexão não estabelecida.");
+                System.out.println("Conexão estabelecida com sucesso.");
+                System.out.println("Erro na conexão.");
+            }
+
+
+
         }
         catch (SocketException e)
         {
@@ -65,7 +98,7 @@ public class Client
 
     public static void main(String[] args)
     {
-        if(args.length != 1)
+        if(args.length != 3)
         {
             printHelp();
             return;
@@ -73,7 +106,7 @@ public class Client
 
         try
         {
-            Client client = new Client(Integer.parseInt(args[0]));
+            Client client = new Client(args);
             client.createConnection();
         }
         catch(Exception e)
@@ -84,6 +117,6 @@ public class Client
 
     private static void printHelp()
     {
-        System.out.println("Usage: Server <port>");
+        System.out.println("Usage: Client <server IP address> <port> <filename>");
     }
 }

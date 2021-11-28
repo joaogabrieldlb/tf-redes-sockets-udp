@@ -18,9 +18,13 @@ public class Server
     private final int PORT;
     private int sequence = 0;
     private DatagramSocket socket;
-    DatagramPacket receivePacket;
-    DatagramPacket sendPacket;
-    
+    private DatagramPacket receivePacket;
+    private DatagramPacket sendPacket;
+    private Message receiveMessage;
+    private Message sendMessage;
+    private byte[] receiveData = new byte[1024];
+    private byte[] sendData = new byte[1024];
+
     private InetAddress clientAddress;
     private int clientPort;
 
@@ -35,8 +39,6 @@ public class Server
 
     public void createAndListenSocket()
     {
-        byte[] incomingData = new byte[1024];
-        byte[] sendData = new byte[1024];
         try
         {
             // implementa socket UDP com a porta
@@ -46,15 +48,15 @@ public class Server
             while(true)
             {
                 // instancia pacote UDP de recepcao
-                receivePacket = new DatagramPacket(incomingData, incomingData.length);
+                receivePacket = new DatagramPacket(receiveData, receiveData.length);
                 // inicializado null pois aguarda recepcao de pacote UDP
                 sendPacket = null;
                 // guarda a mensagem recebida do cliente
-                Message receiveMessage = null;
+                receiveMessage = null;
                 
                 // estabelece a conexao
                 // retorna true se a conexao foi corretamente estabelecida
-                if (!establishedConnection(incomingData, sendData, sendPacket, receivePacket))
+                if (!establishedConnection())
                 {
                     continue;
                 }
@@ -81,7 +83,7 @@ public class Server
                                 System.out.println("Erro: Não foi recebido informacoes validas sobre o arquivo!");
                                 continue;
                             }
-                            transferFile(fileInfo, receivePacket, sendPacket);
+                            // transferFile(fileInfo, receivePacket, sendPacket);
                             break;
                         case FIN:
                             
@@ -247,8 +249,7 @@ public class Server
         }
     }
 
-    private boolean establishedConnection(byte[] incomingData, byte[] sendData,
-        DatagramPacket sendPacket, DatagramPacket receivePacket) throws IOException
+    private boolean establishedConnection() throws IOException
     {
         // aguarda o recebimento de uma mensagem
         socket.receive(receivePacket);
@@ -277,12 +278,7 @@ public class Server
         else
         {
             System.out.println("Pedido de conexao invalido.");
-            System.out.println("Resetando conexao sequencia: " + sequence);
-            sequence = 0;
-            // envia mensagem de RST
-            sendData = ObjectConverter.convertObjectToBytes(new Message(CommandType.RST, sequence));
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
+            connectionReset();
             // conexao nao estabelecida
             return false;
         }
@@ -300,15 +296,21 @@ public class Server
         else
         {
             System.out.println("Pedido de conexao invalido.");
-            System.out.println("Resetando conexao sequencia: " + sequence);
-            sequence = 0;
-            // envia mensagem de RST
-            sendData = ObjectConverter.convertObjectToBytes(new Message(CommandType.RST, sequence));
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
+            connectionReset();
             // conexao nao estabelecida
             return false;
         }
+    }
+
+    private void connectionReset() throws IOException
+    {
+        System.out.println("Resetando conexao sequencia: " + sequence);
+        sequence = 0;
+        // envia mensagem de RST
+        sendMessage = new Message(CommandType.RST, sequence);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
     }
 
     public static void main(String[] args) throws Exception 
