@@ -1,11 +1,55 @@
 package main.java.lib;
+import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
-// import java.nio.file.Path;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 public class FileInfo implements Serializable
 {
-    // private Path filePath;
-    public String fileName;
-    public long fileSize;
-    public String fileHash;
+    //private Path filePath;
+    private int fileBufferSize;
+    private String fileName;
+    private long fileSize;
+    private long totalPackets;
+    private String fileHash;
+
+    public FileInfo(File file, int fileBufferSize)
+    {
+        try
+        {
+            if (!Files.isReadable(Paths.get(fileName)))
+            {
+                System.out.println("Arquivo não encontrado.");
+                return;
+            }
+            
+            this.fileName = file.getName();
+            this.fileSize = file.length();
+            this.fileBufferSize = fileBufferSize;
+            this.totalPackets = (long) Math.ceil((double) this.fileSize / this.fileBufferSize);
+            this.fileHash = computeMD5(file);
+        }
+        catch (NoSuchAlgorithmException | IOException e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private String computeMD5(File file) throws NoSuchAlgorithmException, IOException
+    {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        md.update(Files.readAllBytes(Paths.get(this.fileName)));
+        byte[] digest = md.digest();
+        return byteArrayToHex(digest);
+    }
+    
+    public static String byteArrayToHex(byte[] array) {
+        StringBuilder hashString = new StringBuilder(array.length * 2);
+        for(byte b: array)
+           hashString.append(String.format("%02x", b));
+        return hashString.toString().toUpperCase();
+    }
 }

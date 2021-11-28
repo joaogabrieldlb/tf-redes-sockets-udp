@@ -1,9 +1,13 @@
 package main.java.client;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectOutputStream;
+import java.lang.reflect.Array;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -13,12 +17,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.InvalidParameterException;
+import java.util.Arrays;
 
 import main.java.lib.*;
 import main.java.lib.Message.CommandType;
 
 public class Client 
 {
+    private static final int FILE_BUFFER_SIZE = 512;
+
     private final int SERVER_PORT;
     private InetAddress serverIpAddress;
     private String fileName;
@@ -99,63 +106,82 @@ public class Client
     }
 
     
-    private void sendFile()
+    private void sendFile() throws IOException
     {
-        try
+        if (!Files.isReadable(Paths.get(this.fileName)))
         {
-            // envia informacoes do arquivo
-            if (Files.isReadable(Paths.get(fileName)))
-            {
-                File selectedFile = Paths.get(fileName).toFile();
-                
-                FileInfo fileInfo = new FileInfo();
-                fileInfo.fileName = selectedFile.getName();
-                fileInfo.fileSize = selectedFile.length();
+            System.out.println("Arquivo não encontrado.");
+            return;
+        }
+        final File file = Paths.get(this.fileName).toFile();
+
+        // envia informacoes do arquivo (FileInfo)
+        FileInfo fileInfo = new FileInfo(file, FILE_BUFFER_SIZE);
+        byte[] sendFileInfo = ObjectConverter.convertObjectToBytes(fileInfo);
+        sendMessage = new Message(CommandType.UPLOAD, ++sequence, sendFileInfo);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
+
+        // recebe mensagem de ACK
+        receivePacket = new DatagramPacket(receiveData, receiveData.length);
+        socket.receive(receivePacket);
+        receiveData = receivePacket.getData();
+        receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+        if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+        {
+            System.out.println("Conexão perdida no envio de FileInfo.");
+            connectionReset();
+            return;
+        }
+
+        //envia dados do arquivo
+        try (
+            InputStream inputStream = new BufferedInputStream(new FileInputStream(file));
+            // OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(outputFile));
+        ) {
+
+            byte[] buffer = new byte[FILE_BUFFER_SIZE];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                if (bytesRead < FILE_BUFFER_SIZE) {
+                    buffer = Arrays.copyOf(buffer, bytesRead);
+                }
+
+                // envia pacote DATA
+                sendMessage = new Message(CommandType.DATA, ++sequence, buffer);
+                sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+                sendPacket.setData(sendData);
+                socket.send(sendPacket);
+
+                // recebe mensagem de ACK
+                receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                socket.receive(receivePacket);
+                receiveData = receivePacket.getData();
+                receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+                if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+                {
+                    System.out.println("Conexão perdida no envio de DATA.");
+                    connectionReset();
+                    return;
+                }
             }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
 
-
-
-            // envia mensagem de DATA
-            sendMessage = new Message(CommandType.UPLOAD, sequence);
-            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
-
-            // recebe mensagem de ACK
-            receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            socket.receive(receivePacket);
-            receiveData = receivePacket.getData();
-            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
-
-            if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
-            {
-                System.out.println("Conexão não estabelecida.");
-                return;
-            }
-
-            System.out.println("Conexão estabelecida com sucesso.");
-            // envia mensagem de DATA
-            sendMessage = new Message(CommandType.DATA, sequence);
-            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
-
-            // recebe mensagem de ACK
-            receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            socket.receive(receivePacket);
-            receiveData = receivePacket.getData();
-            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
-
-            if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
-            {
-                System.out.println("Conexão não estabelecida.");
-                return;
-            }
-
-            System.out.println("Conexão estabelecida com sucesso.");
-            // envia mensagem de DATA
-            sendMessage = new Message(CommandType.DATA, sequence);
-            sendData = ObjectConverter.convert
+    private void connectionReset() throws IOException
+    {
+        System.out.println("Resetando conexao sequencia: " + sequence);
+        sequence = 0;
+        // envia mensagem de RST
+        sendMessage = new Message(CommandType.RST, sequence);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
     }
     
     private static void printHelp()
@@ -176,6 +202,7 @@ public class Client
             Client client = new Client(args);
             client.estabilishConnection();
             client.sendFile();
+
         }
         catch(Exception e)
         {
