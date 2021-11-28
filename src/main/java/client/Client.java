@@ -1,6 +1,7 @@
 package main.java.client;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
@@ -8,6 +9,9 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.InvalidParameterException;
 
 import main.java.lib.*;
@@ -50,41 +54,38 @@ public class Client
     //      if (conection timeout)
     //          lastSendRate = sendRate;
 
-    public void createConnection()
+    public boolean estabilishConnection()
     {
         try
         {
             socket = new DatagramSocket();
+
             sendPacket = new DatagramPacket(sendData, sendData.length, serverIpAddress, SERVER_PORT);
             sendMessage = new Message(CommandType.SYN, sequence);
             sendData = ObjectConverter.convertObjectToBytes(sendMessage);
             sendPacket.setData(sendData);
             socket.send(sendPacket);
+
             receivePacket = new DatagramPacket(receiveData, receiveData.length);
             socket.receive(receivePacket);
             receiveData = receivePacket.getData();
             receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
-            if(receiveMessage.getCommand() == CommandType.SYN_ACK && receiveMessage.getSequence() == sequence)
-            {
-                System.out.println("Conexão do servidor recebida com sucesso.");
-                sequence = receiveMessage.getSequence();
-                sendMessage = new Message(CommandType.SYNACK, sequence);
-                sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-                sendPacket.setData(sendData);
-                socket.send(sendPacket);
 
-
-                sequence++;
-            }
-            else
+            if(!(receiveMessage.getCommand() == CommandType.SYN_ACK && receiveMessage.getSequence() == sequence))
             {
                 System.out.println("Conexão não estabelecida.");
-                System.out.println("Conexão estabelecida com sucesso.");
-                System.out.println("Erro na conexão.");
+                return false;
             }
 
+            System.out.println("Conexão do servidor recebida com sucesso.");
+            // envia mensagem ACK para o server
+            sendMessage = new Message(CommandType.ACK, sequence);
+            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+            System.out.println("Conexão estabelecida com sucesso.");
 
-
+            return true;
         }
         catch (SocketException e)
         {
@@ -94,6 +95,72 @@ public class Client
         {
             e.printStackTrace();
         }
+        return false;
+    }
+
+    
+    private void sendFile()
+    {
+        try
+        {
+            // envia informacoes do arquivo
+            if (Files.isReadable(Paths.get(fileName)))
+            {
+                File selectedFile = Paths.get(fileName).toFile();
+                
+                FileInfo fileInfo = new FileInfo();
+                fileInfo.fileName = selectedFile.getName();
+                fileInfo.fileSize = selectedFile.length();
+            }
+
+
+
+            // envia mensagem de DATA
+            sendMessage = new Message(CommandType.UPLOAD, sequence);
+            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+
+            // recebe mensagem de ACK
+            receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.receive(receivePacket);
+            receiveData = receivePacket.getData();
+            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+            if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+            {
+                System.out.println("Conexão não estabelecida.");
+                return;
+            }
+
+            System.out.println("Conexão estabelecida com sucesso.");
+            // envia mensagem de DATA
+            sendMessage = new Message(CommandType.DATA, sequence);
+            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+
+            // recebe mensagem de ACK
+            receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.receive(receivePacket);
+            receiveData = receivePacket.getData();
+            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+            if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+            {
+                System.out.println("Conexão não estabelecida.");
+                return;
+            }
+
+            System.out.println("Conexão estabelecida com sucesso.");
+            // envia mensagem de DATA
+            sendMessage = new Message(CommandType.DATA, sequence);
+            sendData = ObjectConverter.convert
+    }
+    
+    private static void printHelp()
+    {
+        System.out.println("Usage: Client <server IP address> <port> <filename>");
     }
 
     public static void main(String[] args)
@@ -107,16 +174,12 @@ public class Client
         try
         {
             Client client = new Client(args);
-            client.createConnection();
+            client.estabilishConnection();
+            client.sendFile();
         }
         catch(Exception e)
         {
             e.printStackTrace();
         }
-    }
-
-    private static void printHelp()
-    {
-        System.out.println("Usage: Client <server IP address> <port> <filename>");
     }
 }

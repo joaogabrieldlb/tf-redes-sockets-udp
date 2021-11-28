@@ -7,4 +7,5 @@ public class FileInfo implements Serializable
     // private Path filePath;
     public String fileName;
     public long fileSize;
+    public String fileHash;
 }
