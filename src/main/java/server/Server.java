@@ -16,11 +16,15 @@ import main.java.lib.Message.CommandType;
 public class Server 
 {
     private final int PORT;
+    private static final int FILE_BUFFER_SIZE = 512;
     private int sequence = 0;
     private DatagramSocket socket;
-    DatagramPacket receivePacket;
-    DatagramPacket sendPacket;
-    
+    private DatagramPacket receivePacket;
+    private DatagramPacket sendPacket;
+    private Message receiveMessage;
+    private Message sendMessage;
+    byte[] incomingData = new byte[1024];
+    byte[] sendData = new byte[1024];
     private InetAddress clientAddress;
     private int clientPort;
 
@@ -35,8 +39,6 @@ public class Server
 
     public void createAndListenSocket()
     {
-        byte[] incomingData = new byte[1024];
-        byte[] sendData = new byte[1024];
         try
         {
             // implementa socket UDP com a porta
@@ -49,12 +51,10 @@ public class Server
                 receivePacket = new DatagramPacket(incomingData, incomingData.length);
                 // inicializado null pois aguarda recepcao de pacote UDP
                 sendPacket = null;
-                // guarda a mensagem recebida do cliente
-                Message receiveMessage = null;
                 
                 // estabelece a conexao
                 // retorna true se a conexao foi corretamente estabelecida
-                if (!establishedConnection(incomingData, sendData, sendPacket, receivePacket))
+                if (!establishedConnection())
                 {
                     continue;
                 }
@@ -70,18 +70,14 @@ public class Server
                     switch(receiveMessage.getCommand())
                     {
                         case UPLOAD:
-                            Object data = receiveMessage.getData();
-                            FileInfo fileInfo;
-                            if (data instanceof FileInfo)
+                            if (receiveMessage.getSequence() == ++sequence)
                             {
-                                fileInfo = (FileInfo) ObjectConverter.convertBytesToObject(receiveMessage.getData());
+                                transferFile();
                             }
                             else
                             {
-                                System.out.println("Erro: Não foi recebido informacoes validas sobre o arquivo!");
-                                continue;
+
                             }
-                            transferFile(fileInfo, receivePacket, sendPacket);
                             break;
                         case FIN:
                             
@@ -93,145 +89,6 @@ public class Server
 
                 // finaliza conexao
                 
-
-
-                // Message receiveMessage = Message.convertBytesToObject(receivePacket.getData());
-
-                // if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
-                // {
-                //     System.out.println("Recebido pedido de upload de arquivo.");
-                //     sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File name"));
-                //     sendPacket.setData(sendData);
-                //     serverSocket.send(sendPacket);
-                // }
-                // else
-                // {
-                //     System.out.println("Pedido de conexao invalido.");
-                //     System.out.println("Resetando conexao.");
-                //     sequence = 0;
-                //     sendData = Message.convertObjectToBytes(new Message('R', sequence, ""));
-                //     sendPacket.setData(sendData);
-                //     serverSocket.send(sendPacket);
-                //     return;
-                // }
-
-                // serverSocket.receive(receivePacket);
-                // if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
-                // {
-                //     System.out.println("Recebido nome de arquivo: " + receiveMessage.getData());
-                //     file = new FileWriter(receiveMessage.getData());
-
-                //     sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File lenght"));
-                //     sendPacket.setData(sendData);
-                //     serverSocket.send(sendPacket);
-                // }
-
-                // serverSocket.receive(receivePacket);
-                // if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
-                // {
-                //     System.out.println("Recebido tamanho do arquivo: " + receiveMessage.getData());
-                //     int fileSize = Integer.parseInt(receiveMessage.getData());
-                //     int packetsCount = (int) Math.ceil(fileSize / 400.0);
-
-                //     sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File data"));
-                //     sendPacket.setData(sendData);
-                //     serverSocket.send(sendPacket);
-                // }
-                // {
-                //     System.out.println("Recebido pedido de arquivo.");
-                //     file = new FileInfo(receiveMessage.getFileName(), receiveMessage.getFileSize());
-                //     sendMessage(new Message('s', 0, ""), sendPacket);
-                // }
-                // else if (receiveMessage.getCommand().equals('f'))
-                // {
-                //     System.out.println("Recebido pedido de fragmento.");
-                //     if (file == null)
-                //     {
-                //         System.out.println("Arquivo não foi recebido.");
-                //         sendMessage(new Message('f', 0, ""), sendPacket);
-                //     }
-                //     else
-                //     {
-                //         file.addFragment(receiveMessage.getSequence(), receiveMessage.getData());
-                //         if (file.isComplete())
-                //         {
-                //             System.out.println("Arquivo completo.");
-                //             sendMessage(new Message('f', 0, ""), sendPacket);
-                //         }
-                //         else
-                //         {
-                //             System.out.println("Arquivo incompleto.");
-                //             sendMessage(new Message('f', 0, ""), sendPacket);
-                //         }
-                //     }
-                // }
-                // else if (receiveMessage.getCommand().equals('c'))
-                // {
-                //     System.out.println("Recebido pedido de confirmação.");
-                //     if (file == null)
-                //     {
-                //         System.out.println("Arquivo não foi recebido.");
-                //         sendMessage(new Message('c', 0, ""), sendPacket);
-                //     }
-                //     else
-                //     {
-                //         if (file.isComplete())
-                //         {
-                //             System.out.println("Arquivo completo.");
-                //             sendMessage(new Message('c', 0, ""), sendPacket);
-                //         }
-                //         else
-                //         {
-                //             System.out.println("Arquivo incompleto.");
-                //             sendMessage(new Message('c', 0, ""), sendPacket);
-                //         }
-                //     }
-                // }
-                // else
-                // {
-                //     System.out.println("Comando inválido.");
-                // {
-                //     break;
-                // }
-
-                // {
-                //     file = new FileInfo(receiveMessage.getFileName(), receiveMessage.getFileSize());
-                //     System.out.println("Recebido arquivo: " + file.getFileName() + " (" + file.getFileSize() + " bytes)");
-                //     sequence = 0;
-                // }
-                // else if (receiveMessage.getCommand() == 'b')
-                // {
-                //     if (file == null)
-                //     {
-                //         System.out.println("Arquivo não foi recebido.");
-                //         break;
-                //     }
-                //     if (receiveMessage.getSequence() != sequence)
-                //     {
-                //         System.out.println("Sequencia inválida.");
-                //         break;
-                //     }
-                //     file.addChunk(receiveMessage.getData());
-                //     sequence++;
-                //     if (sequence == file.getFileSize())
-                //     {
-                //         System.out.println("Arquivo recebido com sucesso.");
-                //         break;
-                //     }
-                // }
-                // else
-                // {
-                //     System.out.println("Comando inválido.");
-                //     break;
-                // }
-
-
-                // sendPackage.setData(buf, offset, length);
-
-                // byte[] data = receivePacket.getData();
-                // file = (FileInfo) convertToObject(data);
-                // System.out.println("Received file: " + file.getFileName());
-                // System.out.println("Saving file to: " + file.getDestinationDirectory());
             }
         }
         catch(Exception e)
@@ -247,8 +104,23 @@ public class Server
         }
     }
 
-    private boolean establishedConnection(byte[] incomingData, byte[] sendData,
-        DatagramPacket sendPacket, DatagramPacket receivePacket) throws IOException
+    private void transferFile()
+    {
+        Object data = receiveMessage.getData();
+        FileInfo fileInfo;
+        
+        if (!(data instanceof FileInfo))
+        {
+            System.out.println("Erro: Não foi recebido informacoes validas sobre o arquivo!");
+            return;
+        }
+        
+        fileInfo = (FileInfo) ObjectConverter.convertBytesToObject(receiveMessage.getData());
+        int amountFragments = (int) fileInfo.fileSize / FILE_BUFFER_SIZE;
+        String fileName = fileInfo.fileName;
+    }
+
+    private boolean establishedConnection() throws IOException
     {
         // aguarda o recebimento de uma mensagem
         socket.receive(receivePacket);
@@ -261,7 +133,7 @@ public class Server
             clientAddress, clientPort);
 
         // converte byte array recebido no objeto mensagem
-        Message receiveMessage = (Message) ObjectConverter.convertBytesToObject(receivePacket.getData());
+        receiveMessage = (Message) ObjectConverter.convertBytesToObject(receivePacket.getData());
         
         // valida se a menssagem recebida é de SYN
         // ou se o numero de sequencia bate com o esperado
