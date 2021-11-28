@@ -11,14 +11,16 @@ import java.net.InetAddress;
 import java.security.InvalidParameterException;
 
 import main.java.lib.*;
+import main.java.lib.Message.CommandType;
 
 public class Server 
 {
-    private final int port;
-    private DatagramSocket serverSocket;
-    private FileWriter file;
-    // private FileInfo file;
+    private final int PORT;
     private int sequence = 0;
+    private DatagramSocket socket;
+    DatagramPacket receivePacket;
+    DatagramPacket sendPacket;
+    
     private InetAddress clientAddress;
     private int clientPort;
 
@@ -28,144 +30,169 @@ public class Server
         {
             throw new InvalidParameterException("Porta deve estar entre 0 e 65536.");
         }
-        this.port = port;
+        this.PORT = port;
     }
 
     public void createAndListenSocket()
     {
-        byte[] incomingData = new byte[512];
-        byte[] sendData = new byte[512];
+        byte[] incomingData = new byte[1024];
+        byte[] sendData = new byte[1024];
         try
         {
-            serverSocket = new DatagramSocket(port);
-            System.out.println("Server escutando porta " + port);
+            // implementa socket UDP com a porta
+            socket = new DatagramSocket(PORT);
+            System.out.println("Server escutando na porta " + PORT);
 
             while(true)
             {
-                DatagramPacket receivePacket = new DatagramPacket(incomingData, incomingData.length);
-                clientAddress = receivePacket.getAddress();
-                clientPort = receivePacket.getPort();
-
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, receivePacket.getAddress(), receivePacket.getPort());
-
-                serverSocket.receive(receivePacket);
-                Message receiveMessage = Message.convertBytesToObject(receivePacket.getData());
-                if (receiveMessage.getCommand() == 'S' && receiveMessage.getSequence() == sequence)
+                // instancia pacote UDP de recepcao
+                receivePacket = new DatagramPacket(incomingData, incomingData.length);
+                // inicializado null pois aguarda recepcao de pacote UDP
+                sendPacket = null;
+                // guarda a mensagem recebida do cliente
+                Message receiveMessage = null;
+                
+                // estabelece a conexao
+                // retorna true se a conexao foi corretamente estabelecida
+                if (!establishedConnection(incomingData, sendData, sendPacket, receivePacket))
                 {
-                    System.out.println("Recebido pedido de conexao.");
-                    sendData = Message.convertObjectToBytes(new Message('A', sequence, "Send Command"));
-                    sendPacket.setData(sendData);
-                    serverSocket.send(sendPacket);
+                    continue;
                 }
-                else
-                {
-                    System.out.println("Pedido de conexao invalido.");
-                    System.out.println("Resetando conexao para sequencia: " + sequence);
-                    sequence = 0;
-                    sendData = Message.convertObjectToBytes(new Message('R', sequence, ""));
-                    sendPacket.setData(sendData);
-                    serverSocket.send(sendPacket);
-                    return;
-                }
+                System.out.println("Conexao estabelecida com sucesso!");
 
-                serverSocket.receive(receivePacket);
-                if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
+                while(true)
                 {
-                    System.out.println("Recebido pedido de upload de arquivo.");
-                    sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File name"));
-                    sendPacket.setData(sendData);
-                    serverSocket.send(sendPacket);
-                }
-                else
-                {
-                    System.out.println("Pedido de conexao invalido.");
-                    System.out.println("Resetando conexao.");
-                    sequence = 0;
-                    sendData = Message.convertObjectToBytes(new Message('R', sequence, ""));
-                    sendPacket.setData(sendData);
-                    serverSocket.send(sendPacket);
-                    return;
-                }
+                    // aguardo recepcao de pacote UDP
+                    socket.receive(receivePacket);
 
-                serverSocket.receive(receivePacket);
-                if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
-                {
-                    System.out.println("Recebido nome de arquivo: " + receiveMessage.getData());
-                    file = new FileWriter(receiveMessage.getData());
-
-                    sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File lenght"));
-                    sendPacket.setData(sendData);
-                    serverSocket.send(sendPacket);
-                }
-
-                serverSocket.receive(receivePacket);
-                if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
-                {
-                    System.out.println("Recebido tamanho do arquivo: " + receiveMessage.getData());
-                    int fileSize = Integer.parseInt(receiveMessage.getData());
-                    int packetsCount = (int) Math.ceil(fileSize / 400.0);
-
-                    sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File data"));
-                    sendPacket.setData(sendData);
-                    serverSocket.send(sendPacket);
-                }
-                {
-                    System.out.println("Recebido pedido de arquivo.");
-                    file = new FileInfo(receiveMessage.getFileName(), receiveMessage.getFileSize());
-                    sendMessage(new Message('s', 0, ""), sendPacket);
-                }
-                else if (receiveMessage.getCommand().equals('f'))
-                {
-                    System.out.println("Recebido pedido de fragmento.");
-                    if (file == null)
+                    // converte byte array recebido no objeto mensagem
+                    receiveMessage = (Message) ObjectConverter.convertBytesToObject(receivePacket.getData());
+                    switch(receiveMessage.getCommand())
                     {
-                        System.out.println("Arquivo não foi recebido.");
-                        sendMessage(new Message('f', 0, ""), sendPacket);
+                        case UPLOAD:
+                            Object data = receiveMessage.getData();
+                            FileInfo fileInfo;
+                            if (data instanceof FileInfo)
+                            {
+                                fileInfo = (FileInfo) ObjectConverter.convertBytesToObject(receiveMessage.getData());
+                            }
+                            else
+                            {
+                                System.out.println("Erro: Não foi recebido informacoes validas sobre o arquivo!");
+                                continue;
+                            }
+                            transferFile(fileInfo, receivePacket, sendPacket);
+                            break;
+                        case FIN:
+                            
+                        default:
+                            continue;
                     }
-                    else
-                    {
-                        file.addFragment(receiveMessage.getSequence(), receiveMessage.getData());
-                        if (file.isComplete())
-                        {
-                            System.out.println("Arquivo completo.");
-                            sendMessage(new Message('f', 0, ""), sendPacket);
-                        }
-                        else
-                        {
-                            System.out.println("Arquivo incompleto.");
-                            sendMessage(new Message('f', 0, ""), sendPacket);
-                        }
-                    }
-                }
-                else if (receiveMessage.getCommand().equals('c'))
-                {
-                    System.out.println("Recebido pedido de confirmação.");
-                    if (file == null)
-                    {
-                        System.out.println("Arquivo não foi recebido.");
-                        sendMessage(new Message('c', 0, ""), sendPacket);
-                    }
-                    else
-                    {
-                        if (file.isComplete())
-                        {
-                            System.out.println("Arquivo completo.");
-                            sendMessage(new Message('c', 0, ""), sendPacket);
-                        }
-                        else
-                        {
-                            System.out.println("Arquivo incompleto.");
-                            sendMessage(new Message('c', 0, ""), sendPacket);
-                        }
-                    }
-                }
-                else
-                {
-                    System.out.println("Comando inválido.");
-                {
                     break;
                 }
 
+                // finaliza conexao
+                
+
+
+                // Message receiveMessage = Message.convertBytesToObject(receivePacket.getData());
+
+                // if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
+                // {
+                //     System.out.println("Recebido pedido de upload de arquivo.");
+                //     sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File name"));
+                //     sendPacket.setData(sendData);
+                //     serverSocket.send(sendPacket);
+                // }
+                // else
+                // {
+                //     System.out.println("Pedido de conexao invalido.");
+                //     System.out.println("Resetando conexao.");
+                //     sequence = 0;
+                //     sendData = Message.convertObjectToBytes(new Message('R', sequence, ""));
+                //     sendPacket.setData(sendData);
+                //     serverSocket.send(sendPacket);
+                //     return;
+                // }
+
+                // serverSocket.receive(receivePacket);
+                // if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
+                // {
+                //     System.out.println("Recebido nome de arquivo: " + receiveMessage.getData());
+                //     file = new FileWriter(receiveMessage.getData());
+
+                //     sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File lenght"));
+                //     sendPacket.setData(sendData);
+                //     serverSocket.send(sendPacket);
+                // }
+
+                // serverSocket.receive(receivePacket);
+                // if (receiveMessage.getCommand() == 'U' && receiveMessage.getSequence() == ++sequence)
+                // {
+                //     System.out.println("Recebido tamanho do arquivo: " + receiveMessage.getData());
+                //     int fileSize = Integer.parseInt(receiveMessage.getData());
+                //     int packetsCount = (int) Math.ceil(fileSize / 400.0);
+
+                //     sendData = Message.convertObjectToBytes(new Message('U', sequence, "Send File data"));
+                //     sendPacket.setData(sendData);
+                //     serverSocket.send(sendPacket);
+                // }
+                // {
+                //     System.out.println("Recebido pedido de arquivo.");
+                //     file = new FileInfo(receiveMessage.getFileName(), receiveMessage.getFileSize());
+                //     sendMessage(new Message('s', 0, ""), sendPacket);
+                // }
+                // else if (receiveMessage.getCommand().equals('f'))
+                // {
+                //     System.out.println("Recebido pedido de fragmento.");
+                //     if (file == null)
+                //     {
+                //         System.out.println("Arquivo não foi recebido.");
+                //         sendMessage(new Message('f', 0, ""), sendPacket);
+                //     }
+                //     else
+                //     {
+                //         file.addFragment(receiveMessage.getSequence(), receiveMessage.getData());
+                //         if (file.isComplete())
+                //         {
+                //             System.out.println("Arquivo completo.");
+                //             sendMessage(new Message('f', 0, ""), sendPacket);
+                //         }
+                //         else
+                //         {
+                //             System.out.println("Arquivo incompleto.");
+                //             sendMessage(new Message('f', 0, ""), sendPacket);
+                //         }
+                //     }
+                // }
+                // else if (receiveMessage.getCommand().equals('c'))
+                // {
+                //     System.out.println("Recebido pedido de confirmação.");
+                //     if (file == null)
+                //     {
+                //         System.out.println("Arquivo não foi recebido.");
+                //         sendMessage(new Message('c', 0, ""), sendPacket);
+                //     }
+                //     else
+                //     {
+                //         if (file.isComplete())
+                //         {
+                //             System.out.println("Arquivo completo.");
+                //             sendMessage(new Message('c', 0, ""), sendPacket);
+                //         }
+                //         else
+                //         {
+                //             System.out.println("Arquivo incompleto.");
+                //             sendMessage(new Message('c', 0, ""), sendPacket);
+                //         }
+                //     }
+                // }
+                // else
+                // {
+                //     System.out.println("Comando inválido.");
+                // {
+                //     break;
+                // }
 
                 // {
                 //     file = new FileInfo(receiveMessage.getFileName(), receiveMessage.getFileSize());
@@ -201,10 +228,10 @@ public class Server
 
                 // sendPackage.setData(buf, offset, length);
 
-                byte[] data = receivePacket.getData();
-                file = (FileInfo) convertToObject(data);
-                System.out.println("Received file: " + file.getFileName());
-                System.out.println("Saving file to: " + file.getDestinationDirectory());
+                // byte[] data = receivePacket.getData();
+                // file = (FileInfo) convertToObject(data);
+                // System.out.println("Received file: " + file.getFileName());
+                // System.out.println("Saving file to: " + file.getDestinationDirectory());
             }
         }
         catch(Exception e)
@@ -220,18 +247,68 @@ public class Server
         }
     }
 
-    private Object convertToObject(byte[] bytes)
+    private boolean establishedConnection(byte[] incomingData, byte[] sendData,
+        DatagramPacket sendPacket, DatagramPacket receivePacket) throws IOException
     {
-        InputStream is = new ByteArrayInputStream(bytes);
-		try (ObjectInputStream ois = new ObjectInputStream(is))
+        // aguarda o recebimento de uma mensagem
+        socket.receive(receivePacket);
+        
+        // coleta dados do cliente que enviou a mensagem
+        clientAddress = receivePacket.getAddress();
+        clientPort = receivePacket.getPort();
+        
+        sendPacket = new DatagramPacket(sendData, sendData.length,
+            clientAddress, clientPort);
+
+        // converte byte array recebido no objeto mensagem
+        Message receiveMessage = (Message) ObjectConverter.convertBytesToObject(receivePacket.getData());
+        
+        // valida se a menssagem recebida é de SYN
+        // ou se o numero de sequencia bate com o esperado
+        if (receiveMessage.getCommand() == CommandType.SYN
+                && receiveMessage.getSequence() == sequence)
         {
-			return ois.readObject();
-		}
-        catch (IOException | ClassNotFoundException ioe) 
+            System.out.println(clientAddress + ":" + clientPort + " - " + "SYN recebido");
+            // prepara e envia mensagem de ACK
+            sendData = ObjectConverter.convertObjectToBytes(new Message(CommandType.SYN_ACK, sequence));
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+        }
+        else
         {
-			ioe.printStackTrace();	
-			return null;
-		}
+            System.out.println("Pedido de conexao invalido.");
+            System.out.println("Resetando conexao sequencia: " + sequence);
+            sequence = 0;
+            // envia mensagem de RST
+            sendData = ObjectConverter.convertObjectToBytes(new Message(CommandType.RST, sequence));
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+            // conexao nao estabelecida
+            return false;
+        }
+
+        // aguardando o recebimento do reconhecimento pelo cliente
+        socket.receive(receivePacket);
+
+        // valida se a menssagem recebida nao é de ACK ou se...(?)
+        if (receiveMessage.getCommand() == CommandType.ACK 
+                || receiveMessage.getSequence() == sequence)
+        {
+            // conexao estabelecida
+            return true;
+        }
+        else
+        {
+            System.out.println("Pedido de conexao invalido.");
+            System.out.println("Resetando conexao sequencia: " + sequence);
+            sequence = 0;
+            // envia mensagem de RST
+            sendData = ObjectConverter.convertObjectToBytes(new Message(CommandType.RST, sequence));
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+            // conexao nao estabelecida
+            return false;
+        }
     }
 
     public static void main(String[] args) throws Exception 

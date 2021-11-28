@@ -18,6 +18,12 @@ public class Message implements Serializable
     private CommandType command;
     private long sequence;
     private byte[] data = new byte[PAYLOAD_SIZE];
+
+    public Message(CommandType command, long sequence)
+    {
+        this.command = command;
+        this.sequence = sequence;
+    }
     
     public Message(CommandType command, int sequence, byte[] data)
     {
@@ -40,33 +46,4 @@ public class Message implements Serializable
     {
         return data;
     }
-
-	public static byte[] convertObjectToBytes(Message obj) 
-    {
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		try (ObjectOutputStream oos = new ObjectOutputStream(baos)) 
-        {
-			oos.writeObject(obj);
-			return baos.toByteArray();
-		} 
-        catch (IOException e) 
-        {
-			e.printStackTrace();
-			return null;
-		}
-	}
-
-    public static Message convertBytesToObject(byte[] bytes) 
-    {
-		InputStream is = new ByteArrayInputStream(bytes);
-		try (ObjectInputStream ois = new ObjectInputStream(is)) 
-        {
-			return (Message) ois.readObject();
-		} 
-        catch (IOException | ClassNotFoundException ioe) 
-        {
-			ioe.printStackTrace();
-			return null;
-		}
-	}
 }
