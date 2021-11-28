@@ -2,7 +2,6 @@ package main.java.lib;
 
 import java.io.Serializable;
 
-
 public class Message implements Serializable
 {
     static final int PAYLOAD_SIZE = 512;

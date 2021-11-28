@@ -23,8 +23,9 @@ public class Server
     private DatagramPacket sendPacket;
     private Message receiveMessage;
     private Message sendMessage;
-    byte[] incomingData = new byte[1024];
-    byte[] sendData = new byte[1024];
+    private byte[] receiveData = new byte[1024];
+    private byte[] sendData = new byte[1024];
+
     private InetAddress clientAddress;
     private int clientPort;
 
@@ -48,7 +49,7 @@ public class Server
             while(true)
             {
                 // instancia pacote UDP de recepcao
-                receivePacket = new DatagramPacket(incomingData, incomingData.length);
+                receivePacket = new DatagramPacket(receiveData, receiveData.length);
                 // inicializado null pois aguarda recepcao de pacote UDP
                 sendPacket = null;
                 
@@ -149,12 +150,7 @@ public class Server
         else
         {
             System.out.println("Pedido de conexao invalido.");
-            System.out.println("Resetando conexao sequencia: " + sequence);
-            sequence = 0;
-            // envia mensagem de RST
-            sendData = ObjectConverter.convertObjectToBytes(new Message(CommandType.RST, sequence));
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
+            connectionReset();
             // conexao nao estabelecida
             return false;
         }
@@ -172,15 +168,21 @@ public class Server
         else
         {
             System.out.println("Pedido de conexao invalido.");
-            System.out.println("Resetando conexao sequencia: " + sequence);
-            sequence = 0;
-            // envia mensagem de RST
-            sendData = ObjectConverter.convertObjectToBytes(new Message(CommandType.RST, sequence));
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
+            connectionReset();
             // conexao nao estabelecida
             return false;
         }
+    }
+
+    private void connectionReset() throws IOException
+    {
+        System.out.println("Resetando conexao sequencia: " + sequence);
+        sequence = 0;
+        // envia mensagem de RST
+        sendMessage = new Message(CommandType.RST, sequence);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
     }
 
     public static void main(String[] args) throws Exception 
