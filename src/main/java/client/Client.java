@@ -1,26 +1,24 @@
 package main.java.client;
 
 import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectOutputStream;
-import java.lang.reflect.Array;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.InvalidParameterException;
 import java.util.Arrays;
 
-import main.java.lib.*;
+import main.java.lib.FileInfo;
+import main.java.lib.Message;
 import main.java.lib.Message.CommandType;
+import main.java.lib.ObjectConverter;
 
 public class Client 
 {
@@ -49,7 +47,12 @@ public class Client
         {
             throw new InvalidParameterException("Porta deve estar entre 0 e 65536.");
         }
+        
         this.fileName = args[2];
+        if (!Files.isReadable(Paths.get(fileName)))
+        {
+            throw new InvalidParameterException("Arquivo não encontrado.");
+        }
     }
 
     // long lastSendRate = Long.MAX_VALUE;
