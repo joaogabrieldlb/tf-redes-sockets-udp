@@ -1,12 +1,10 @@
-package main.java.lib;
+
 
 import java.io.Serializable;
 
 public class Message implements Serializable
 {
     static final int PAYLOAD_SIZE = 512;
-
-    public enum CommandType { SYN, SYN_ACK, ACK, UPLOAD, DOWNLOAD, DATA, SUCCESS, FAILURE, FIN, RST, TIMEOUT };
 
     private CommandType command;
     private long sequence;

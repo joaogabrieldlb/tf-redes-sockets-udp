@@ -1,4 +1,4 @@
-package main.java.server;
+
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -10,15 +10,10 @@ import java.net.InetAddress;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 
-import main.java.lib.FileInfo;
-import main.java.lib.Message;
-import main.java.lib.Message.CommandType;
-import main.java.lib.ObjectConverter;
-
 public class Server 
 {
     private final int PORT;
-    private static final int FILE_BUFFER_SIZE = 512;
+    // private static final int FILE_BUFFER_SIZE = 512;  
     private int sequence = 0;
     private FileInfo fileInfo;
     private DatagramSocket socket;
@@ -73,7 +68,7 @@ public class Server
 
             if(!(receiveMessage.getCommand() == CommandType.DATA && receiveMessage.getSequence() == ++sequence))
             {
-                System.out.println("Conexão perdida no recebimento dos dados do arquivo.");
+                System.out.println("Conexao perdida no recebimento dos dados do arquivo.");
                 connectionReset();
                 return false;
             }
@@ -121,7 +116,7 @@ public class Server
 
         if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
         {
-            System.out.println("Falha na confirmação do status do arquivo.");
+            System.out.println("Falha na confirmaçao do status do arquivo.");
             // connectionReset();
             return false;
         }
@@ -219,7 +214,7 @@ public class Server
 
                 if(!(receiveMessage.getCommand() == CommandType.FIN && receiveMessage.getSequence() == ++sequence))
                 {
-                    System.out.println("Falha no recebimento de encerramento da conexão.");
+                    System.out.println("Falha no recebimento de encerramento da conexao.");
                     return false;
                 }
                 System.out.println("Pedido de encerramento recebido.");
@@ -246,12 +241,12 @@ public class Server
 
             if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
             {
-                System.out.println("Falha no encerramento da conexão.");
+                System.out.println("Falha no encerramento da conexao.");
                 return false;
             }
-            System.out.println("Confirmação do encerramento da conexão recebida com sucesso pelo client.");
+            System.out.println("Confirmaçao do encerramento da conexao recebida com sucesso pelo client.");
 
-            System.out.println("Conexão encerrada com sucesso.");
+            System.out.println("Conexao encerrada com sucesso.");
             return true;
         } catch (IOException e) {
             e.printStackTrace();

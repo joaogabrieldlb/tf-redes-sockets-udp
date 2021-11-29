@@ -1,4 +1,4 @@
-package main.java.client;
+
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -13,11 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.InvalidParameterException;
 import java.util.Arrays;
-
-import main.java.lib.FileInfo;
-import main.java.lib.Message;
-import main.java.lib.Message.CommandType;
-import main.java.lib.ObjectConverter;
 
 public class Client 
 {
@@ -47,7 +42,7 @@ public class Client
         this.fileName = args[2];
         if (!Files.isReadable(Paths.get(fileName)))
         {
-            throw new InvalidParameterException("Arquivo não encontrado.");
+            throw new InvalidParameterException("Arquivo nao encontrado.");
         }
     }
 
@@ -66,7 +61,7 @@ public class Client
         {
             socket = new DatagramSocket();
 
-            // envia o comando de conexão SYN
+            // envia o comando de conexao SYN
             sendPacket = new DatagramPacket(sendData, sendData.length, serverIpAddress, SERVER_PORT);
             sendMessage = new Message(CommandType.SYN, sequence);
             sendData = ObjectConverter.convertObjectToBytes(sendMessage);
@@ -80,10 +75,10 @@ public class Client
 
             if(!(receiveMessage.getCommand() == CommandType.SYN_ACK && receiveMessage.getSequence() == sequence))
             {
-                System.out.println("Conexão não estabelecida.");
+                System.out.println("Conexao nao estabelecida.");
                 return false;
             }
-            System.out.println("Conexão do servidor recebida com sucesso.");
+            System.out.println("Conexao do servidor recebida com sucesso.");
 
             // envia mensagem ACK para o server
             sendMessage = new Message(CommandType.ACK, sequence);
@@ -91,7 +86,7 @@ public class Client
             sendPacket.setData(sendData);
             socket.send(sendPacket);
 
-            System.out.println("Conexão estabelecida com sucesso.");
+            System.out.println("Conexao estabelecida com sucesso.");
             return true;
         }
         catch (IOException e)
@@ -105,7 +100,7 @@ public class Client
     {
         if (!Files.isReadable(Paths.get(this.fileName)))
         {
-            System.out.println("Arquivo não encontrado.");
+            System.out.println("Arquivo nao encontrado.");
             return false;
         }
         final File file = Paths.get(this.fileName).toFile();
@@ -126,7 +121,7 @@ public class Client
 
         if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
         {
-            System.out.println("Conexão perdida no envio de FileInfo.");
+            System.out.println("Conexao perdida no envio de FileInfo.");
             connectionReset();
             return false;
         }
@@ -160,11 +155,11 @@ public class Client
 
                 if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
                 {
-                    System.out.println("Conexão perdida no envio de DATA.");
+                    System.out.println("Conexao perdida no envio de DATA.");
                     connectionReset();
                     return false;
                 }
-                System.out.println("Confirmação de recebimento do pacote " + i + "/" + fileInfo.getTotalPackets() + " pelo server.");
+                System.out.println("Confirmaçao de recebimento do pacote " + i + "/" + fileInfo.getTotalPackets() + " pelo server.");
                 i++;
             }
         }
@@ -178,7 +173,7 @@ public class Client
 
         if(!((result == CommandType.SUCCESS || result == CommandType.FAILURE ) && receiveMessage.getSequence() == ++sequence))
         {
-            System.out.println("Conexão perdida no envio do arquivo.");
+            System.out.println("Conexao perdida no envio do arquivo.");
             // connectionReset();
             return false;
         }
@@ -223,7 +218,7 @@ public class Client
 
             if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
             {
-                System.out.println("Falha no encerramento da conexão.");
+                System.out.println("Falha no encerramento da conexao.");
                 return false;
             }
             System.out.println("Pedido de encerramento para o servidor recebida pelo servidor.");
@@ -236,7 +231,7 @@ public class Client
 
             if(!(receiveMessage.getCommand() == CommandType.FIN && receiveMessage.getSequence() == ++sequence))
             {
-                System.out.println("Falha no encerramento da conexão.");
+                System.out.println("Falha no encerramento da conexao.");
                 return false;
             }
             System.out.println("Pedido de encerramento do servidor recebida com sucesso.");
@@ -247,7 +242,7 @@ public class Client
             sendPacket.setData(sendData);
             socket.send(sendPacket);
 
-            System.out.println("Conexão encerrada com sucesso.");
+            System.out.println("Conexao encerrada com sucesso.");
             return true;
         } catch (IOException e) {
             e.printStackTrace();
