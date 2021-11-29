@@ -8,7 +8,6 @@ import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -31,13 +30,10 @@ public class Client
     private DatagramSocket socket;
     private DatagramPacket receivePacket;
     private DatagramPacket sendPacket;
-    private Message receiveMessage;
-    private Message sendMessage;
     private byte[] receiveData = new byte[1024];
     private byte[] sendData = new byte[1024];
-
-    // private InetAddress clientAddress;
-    // private int clientPort;
+    private Message receiveMessage;
+    private Message sendMessage;
 
     public Client(String[] args) throws UnknownHostException
     {
@@ -136,14 +132,16 @@ public class Client
         }
 
         //envia dados do arquivo
-        try (
-            InputStream inputStream = new BufferedInputStream(new FileInputStream(file));
-            // OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(outputFile));
-        ) {
+        try (InputStream inputStream = new BufferedInputStream(new FileInputStream(file)))
+        {
             byte[] buffer = new byte[FILE_BUFFER_SIZE];
+
+            int i = 0;
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
-                if (bytesRead < FILE_BUFFER_SIZE) {
+                // tratamento do buffer para o último pacote
+                if (bytesRead < FILE_BUFFER_SIZE)
+                {
                     buffer = Arrays.copyOf(buffer, bytesRead);
                 }
 
@@ -152,6 +150,7 @@ public class Client
                 sendData = ObjectConverter.convertObjectToBytes(sendMessage);
                 sendPacket.setData(sendData);
                 socket.send(sendPacket);
+                System.out.println("Realizado envio do pacote " + i + "/" + fileInfo.getTotalPackets() + ".");
 
                 // recebe mensagem de ACK
                 receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -165,9 +164,9 @@ public class Client
                     connectionReset();
                     return false;
                 }
+                System.out.println("Confirmação de recebimento do pacote " + i + "/" + fileInfo.getTotalPackets() + " pelo server.");
+                i++;
             }
-        } catch (IOException e) {
-            e.printStackTrace();
         }
 
         // aguarda status do envio do arquivo

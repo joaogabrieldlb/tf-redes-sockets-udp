@@ -1,13 +1,8 @@
 package main.java.server;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -15,20 +10,22 @@ import java.net.InetAddress;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 
-import main.java.lib.*;
+import main.java.lib.FileInfo;
+import main.java.lib.Message;
 import main.java.lib.Message.CommandType;
+import main.java.lib.ObjectConverter;
 
 public class Server 
 {
     private final int PORT;
     private static final int FILE_BUFFER_SIZE = 512;
     private int sequence = 0;
+    private FileInfo fileInfo;
     private DatagramSocket socket;
     private DatagramPacket receivePacket;
     private DatagramPacket sendPacket;
     private Message receiveMessage;
     private Message sendMessage;
-    private FileInfo fileInfo;
     private byte[] receiveData = new byte[1024];
     private byte[] sendData = new byte[1024];
 
@@ -209,46 +206,50 @@ public class Server
     }
 
 
-    private boolean finallizeConnection()
+    private boolean finallizeConnection(boolean status)
     {
         try {
-            // recebe mensagem FIN
-            receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            socket.receive(receivePacket);
-            receiveData = receivePacket.getData();
-            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
-
-            if(!(receiveMessage.getCommand() == CommandType.FIN && receiveMessage.getSequence() == ++sequence))
+            if (status)
             {
-                System.out.println("Falha no recebimento de encerramento da conexão.");
-                return false;
-            }
-            System.out.println("Pedido de encerramento recebido.");
+                // recebe mensagem FIN
+                receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                socket.receive(receivePacket);
+                receiveData = receivePacket.getData();
+                receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
 
-            // envia mensagem ACK para o client
-            sendMessage = new Message(CommandType.ACK, sequence);
+                if(!(receiveMessage.getCommand() == CommandType.FIN && receiveMessage.getSequence() == ++sequence))
+                {
+                    System.out.println("Falha no recebimento de encerramento da conexão.");
+                    return false;
+                }
+                System.out.println("Pedido de encerramento recebido.");
+
+                // envia mensagem ACK para o client
+                sendMessage = new Message(CommandType.ACK, sequence);
+                sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+                sendPacket.setData(sendData);
+                socket.send(sendPacket);
+            }
+
+            // envia mensagem FIN para o client
+            sendMessage = new Message(CommandType.FIN, ++sequence);
             sendData = ObjectConverter.convertObjectToBytes(sendMessage);
             sendPacket.setData(sendData);
             socket.send(sendPacket);
+            System.out.println("Pedido de encerramento enviado.");
 
-            // recebe mensagem de FIN
+            // recebe mensagem de ACK
             receivePacket = new DatagramPacket(receiveData, receiveData.length);
             socket.receive(receivePacket);
             receiveData = receivePacket.getData();
             receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
 
-            if(!(receiveMessage.getCommand() == CommandType.FIN && receiveMessage.getSequence() == ++sequence))
+            if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
             {
                 System.out.println("Falha no encerramento da conexão.");
                 return false;
             }
-            System.out.println("Pedido de encerramento do servidor recebida com sucesso.");
-
-            // envia mensagem ACK para o server
-            sendMessage = new Message(CommandType.ACK, sequence);
-            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
+            System.out.println("Confirmação do encerramento da conexão recebida com sucesso pelo client.");
 
             System.out.println("Conexão encerrada com sucesso.");
             return true;
@@ -277,8 +278,11 @@ public class Server
         try
         {
             Server server = new Server(Integer.parseInt(args[0]));
-            server.establishedConnection();
-            server.receiveFile();
+            boolean status;
+            status = server.establishedConnection();
+            if (status)
+                status = server.receiveFile();
+            server.finallizeConnection(status);
         }
         catch(Exception e)
         {
