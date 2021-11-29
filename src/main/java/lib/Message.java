@@ -6,11 +6,11 @@ public class Message implements Serializable
 {
     static final int PAYLOAD_SIZE = 512;
 
-    public enum CommandType { SYN, ACK, SYN_ACK, RST, FIN, UPLOAD, DOWNLOAD, DATA, CHECKSUM, TIMEOUT };
+    public enum CommandType { SYN, SYN_ACK, ACK, UPLOAD, DOWNLOAD, DATA, SUCCESS, FAILURE, FIN, RST, TIMEOUT };
 
     private CommandType command;
     private long sequence;
-    private byte[] data = new byte[PAYLOAD_SIZE];
+    private byte[] data;
 
     public Message(CommandType command, long sequence)
     {

@@ -38,15 +38,31 @@ public class FileInfo implements Serializable
         }
     }
 
-    private String computeMD5(File file) throws NoSuchAlgorithmException, IOException
+    public long getTotalPackets() {
+        return totalPackets;
+    }
+
+    public String getFileHash() {
+        return fileHash;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public static String computeMD5(File file) throws NoSuchAlgorithmException, IOException
     {
         MessageDigest md = MessageDigest.getInstance("MD5");
-        md.update(Files.readAllBytes(Paths.get(this.fileName)));
+        md.update(Files.readAllBytes(file.toPath()));
         byte[] digest = md.digest();
         return byteArrayToHex(digest);
     }
     
-    public static String byteArrayToHex(byte[] array) {
+    private static String byteArrayToHex(byte[] array) {
         StringBuilder hashString = new StringBuilder(array.length * 2);
         for(byte b: array)
            hashString.append(String.format("%02x", b));

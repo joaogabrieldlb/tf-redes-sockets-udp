@@ -70,6 +70,7 @@ public class Client
         {
             socket = new DatagramSocket();
 
+            // envia o comando de conexão SYN
             sendPacket = new DatagramPacket(sendData, sendData.length, serverIpAddress, SERVER_PORT);
             sendMessage = new Message(CommandType.SYN, sequence);
             sendData = ObjectConverter.convertObjectToBytes(sendMessage);
@@ -86,20 +87,16 @@ public class Client
                 System.out.println("Conexão não estabelecida.");
                 return false;
             }
-
             System.out.println("Conexão do servidor recebida com sucesso.");
+
             // envia mensagem ACK para o server
             sendMessage = new Message(CommandType.ACK, sequence);
             sendData = ObjectConverter.convertObjectToBytes(sendMessage);
             sendPacket.setData(sendData);
             socket.send(sendPacket);
+
             System.out.println("Conexão estabelecida com sucesso.");
-
             return true;
-        }
-        catch (SocketException e)
-        {
-
         }
         catch (IOException e)
         {
@@ -107,14 +104,13 @@ public class Client
         }
         return false;
     }
-
     
-    private void sendFile() throws IOException
+    private boolean sendFile() throws IOException
     {
         if (!Files.isReadable(Paths.get(this.fileName)))
         {
             System.out.println("Arquivo não encontrado.");
-            return;
+            return false;
         }
         final File file = Paths.get(this.fileName).toFile();
 
@@ -136,7 +132,7 @@ public class Client
         {
             System.out.println("Conexão perdida no envio de FileInfo.");
             connectionReset();
-            return;
+            return false;
         }
 
         //envia dados do arquivo
@@ -144,7 +140,6 @@ public class Client
             InputStream inputStream = new BufferedInputStream(new FileInputStream(file));
             // OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(outputFile));
         ) {
-
             byte[] buffer = new byte[FILE_BUFFER_SIZE];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
@@ -168,12 +163,36 @@ public class Client
                 {
                     System.out.println("Conexão perdida no envio de DATA.");
                     connectionReset();
-                    return;
+                    return false;
                 }
             }
-        } catch (IOException ex) {
-            ex.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+
+        // aguarda status do envio do arquivo
+        receivePacket = new DatagramPacket(receiveData, receiveData.length);
+        socket.receive(receivePacket);
+        receiveData = receivePacket.getData();
+        receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+        CommandType result = receiveMessage.getCommand();
+
+        if(!((result == CommandType.SUCCESS || result == CommandType.FAILURE ) && receiveMessage.getSequence() == ++sequence))
+        {
+            System.out.println("Conexão perdida no envio do arquivo.");
+            // connectionReset();
+            return false;
+        }
+
+        System.out.println("Envio do arquivo concluído com status: " + result.name());
+
+        // envia mensagem ACK para o server
+        sendMessage = new Message(CommandType.ACK, sequence);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
+        
+        return true;
     }
 
     private void connectionReset() throws IOException
@@ -186,6 +205,60 @@ public class Client
         sendPacket.setData(sendData);
         socket.send(sendPacket);
     }
+
+    private boolean finallizeConnection()
+    {
+        try {
+            // envia mensagem FIN
+            sendPacket = new DatagramPacket(sendData, sendData.length, serverIpAddress, SERVER_PORT);
+            sendMessage = new Message(CommandType.FIN, ++sequence);
+            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+
+            // recebe mensagem de ACK
+            receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.receive(receivePacket);
+            receiveData = receivePacket.getData();
+            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+            if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+            {
+                System.out.println("Falha no encerramento da conexão.");
+                return false;
+            }
+            System.out.println("Pedido de encerramento para o servidor recebida pelo servidor.");
+
+            // recebe mensagem de FIN
+            receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.receive(receivePacket);
+            receiveData = receivePacket.getData();
+            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+            if(!(receiveMessage.getCommand() == CommandType.FIN && receiveMessage.getSequence() == ++sequence))
+            {
+                System.out.println("Falha no encerramento da conexão.");
+                return false;
+            }
+            System.out.println("Pedido de encerramento do servidor recebida com sucesso.");
+
+            // envia mensagem ACK para o server
+            sendMessage = new Message(CommandType.ACK, sequence);
+            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+
+            System.out.println("Conexão encerrada com sucesso.");
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            socket.close();
+        }
+
+        return false;
+    }
+
     
     private static void printHelp()
     {
@@ -205,7 +278,7 @@ public class Client
             Client client = new Client(args);
             client.estabilishConnection();
             client.sendFile();
-
+            client.finallizeConnection();
         }
         catch(Exception e)
         {
@@ -213,3 +286,4 @@ public class Client
         }
     }
 }
+
