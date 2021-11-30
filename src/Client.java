@@ -1,5 +1,3 @@
-
-
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -15,7 +13,6 @@ import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Queue;
 
 public class Client 
 {
@@ -25,7 +22,7 @@ public class Client
     private final int SERVER_PORT;
     private InetAddress serverIpAddress;
     private String fileName;
-    private int sequence = 0;
+    private long sequence = 0;
     private DatagramSocket socket;
     private DatagramPacket receivePacket;
     private DatagramPacket sendPacket;
@@ -50,54 +47,63 @@ public class Client
         }
     }
 
-    // long lastSendRate = Long.MAX_VALUE;
-    // for (int i = 0; tranfe; i++)
-    //      if (sendRate == lastSendRate)
-    //          long sendRate = Math.round(Math.pow(2, i));
-    //      else
-    //          sendRate += 1;
-    //      if (conection timeout)
-    //          lastSendRate = sendRate;
-
     public boolean estabilishConnection()
     {
         try
         {
             socket = new DatagramSocket();
+            int errorCount = 0;
 
-            // envia o comando de conexao SYN
-            sendPacket = new DatagramPacket(sendData, sendData.length, serverIpAddress, SERVER_PORT);
-            sendMessage = new Message(CommandType.SYN, sequence);
-            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
-
-            receivePacket = new DatagramPacket(receiveData, receiveData.length);
-            socket.receive(receivePacket);
-            receiveData = receivePacket.getData();
-            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
-
-            if(!(receiveMessage.getCommand() == CommandType.SYN_ACK && receiveMessage.getSequence() == sequence))
+            // permite 3 erros de conexao antes do RST
+            while(errorCount < 3)
             {
-                System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao nao estabelecida.");
-                return false;
+                // envia o comando de conexao SYN
+                sendPacket = new DatagramPacket(sendData, sendData.length, serverIpAddress, SERVER_PORT);
+                sendMessage = new Message(CommandType.SYN, sequence);
+                sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+                sendPacket.setData(sendData);
+                socket.send(sendPacket);
+
+                receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                socket.receive(receivePacket);
+                receiveData = receivePacket.getData();
+                receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+                if(!(receiveMessage.getCommand() == CommandType.SYN_ACK && receiveMessage.getSequence() == sequence))
+                {
+                    System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao nao estabelecida.");
+                    // conexao nao estabelecida
+                    errorCount++;
+                    continue;
+                }
+                System.out.println("S#" + sequence + " " + receiveMessage.getCommand().name() + "> Conexao do servidor recebida com sucesso.");
+
+                // envia mensagem ACK para o server
+                sendMessage = new Message(CommandType.ACK, sequence);
+                sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+                sendPacket.setData(sendData);
+                socket.send(sendPacket);
+
+                System.out.println("LOG> Conexao estabelecida com sucesso.");
+                return true;
             }
-            System.out.println("S#" + sequence + " " + receiveMessage.getCommand().name() + "> Conexao do servidor recebida com sucesso.");
-
-            // envia mensagem ACK para o server
-            sendMessage = new Message(CommandType.ACK, sequence);
-            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-            sendPacket.setData(sendData);
-            socket.send(sendPacket);
-
-            System.out.println("LOG> Conexao estabelecida com sucesso.");
-            return true;
         }
         catch (IOException e)
         {
             e.printStackTrace();
         }
         return false;
+    }
+    
+    private void connectionReset(long sequence) throws IOException
+    {
+        System.out.println("LOG> Resetando conexao sequencia: " + sequence);
+        this.sequence = sequence;
+        // envia mensagem de RST
+        sendMessage = new Message(CommandType.RST, sequence);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
     }
     
     private boolean sendFile() throws IOException
@@ -126,7 +132,7 @@ public class Client
         if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
         {
             System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de FileInfo.");
-            connectionReset();
+            // connectionReset(0);
             return false;
         }
         System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Recebida confirmacao do FileInfo.");
@@ -160,7 +166,7 @@ public class Client
                 if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
                 {
                     System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de DATA.");
-                    connectionReset();
+                    // connectionReset(0);
                     return false;
                 }
                 System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Confirmacao de recebimento do pacote #" + i + " de " + fileInfo.getTotalPackets() + " pelo servidor.");
@@ -193,6 +199,7 @@ public class Client
         return true;
     }
     
+    
     private boolean sendFileSlowStart() throws IOException
     {
         if (!Files.isReadable(Paths.get(this.fileName)))
@@ -219,7 +226,7 @@ public class Client
         if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
         {
             System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de FileInfo.");
-            connectionReset();
+            // connectionReset(0);
             return false;
         }
         System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Recebida confirmacao do FileInfo.");
@@ -228,48 +235,46 @@ public class Client
         // socket.setSoTimeout(SOCKET_TIMEOUT);
         try (InputStream inputStream = new BufferedInputStream(new FileInputStream(file)))
         {
-            byte[][] cachedBuffers;
+            List<byte[]> cachedBuffers = new ArrayList<>();
 
-            long packetNumber = 1;
+            long packetNumber = 0;
             int bytesRead;
             long remainingPackets = fileInfo.getTotalPackets();
+            int lastConfirmedSend = 0;
 
             while (remainingPackets > 0)
             {
-                for (int parallelSend = 1; parallelSend <= remainingPackets || parallelSend <= Integer.MAX_VALUE; )
+                for (int parallelSend = 1; parallelSend <= remainingPackets && parallelSend <= 32 /* Integer.MAX_VALUE */; )
                 {
-                    cachedBuffers = new byte[parallelSend][];
-                    int reads = 0;
+                    System.out.println("================> parallelSend: " + parallelSend);
+                    int availableReads = cachedBuffers.size();
                     byte[] buffer = new byte[FILE_BUFFER_SIZE];
 
                     // coloca em cache os buffers necessarios para envio dos pacotes
-                    while ((bytesRead = inputStream.read(buffer)) != -1 && reads < parallelSend) {
+                    while ((bytesRead = inputStream.read(buffer)) != -1 && availableReads < parallelSend) {
                         // tratamento do buffer para o último pacote
                         if (bytesRead < FILE_BUFFER_SIZE)
                         {
                             buffer = Arrays.copyOf(buffer, bytesRead);
                         }
-                        System.out.println("parallelsend: " + parallelSend);
-                        System.out.println("reads: " + reads);
-                        System.out.println("cachedBuffers: " + cachedBuffers.length);
-                        cachedBuffers[reads] = buffer;
-                        reads++;
+                        cachedBuffers.add(buffer);
+                        availableReads++;
                     }
                 
                     long initialSequence = sequence;
 
-                    for (int sends = 0; sends < reads; sends++)
+                    for (int sends = 0; sends < availableReads; sends++)
                     {
                         // envia pacote DATA
-                        sendMessage = new Message(CommandType.DATA, ++sequence, cachedBuffers[sends]);
+                        sendMessage = new Message(CommandType.DATA, ++sequence, cachedBuffers.get(sends));
                         sendData = ObjectConverter.convertObjectToBytes(sendMessage);
                         sendPacket.setData(sendData);
                         socket.send(sendPacket);
                     }
 
-                    int lastConfirmedSend = 0;
+                    boolean allReceived = true;
 
-                    for (int confirmedSends = 0; confirmedSends < reads; confirmedSends++)
+                    for (int confirmedSends = 0; confirmedSends < availableReads; confirmedSends++)
                     {
                         // recebe mensagem de ACK
                         receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -277,18 +282,19 @@ public class Client
                         receiveData = receivePacket.getData();
                         receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
 
-                        if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+                        if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == ++initialSequence))
                         {
                             System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de DATA.");
-                            parallelSend = 1;
-                            connectionReset();
+                            allReceived = false;
+                            sequence = initialSequence + confirmedSends;
                             break;
                         }
-                        System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Confirmacao de recebimento do pacote #" + confirmedSends + " de " + fileInfo.getTotalPackets() + " pelo servidor.");
-                        parallelSend *= 2;
+                        System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Confirmacao de recebimento do pacote #" + ++packetNumber + " de " + fileInfo.getTotalPackets() + " pelo servidor.");
+                        cachedBuffers.remove(0);
                         lastConfirmedSend++;
                         remainingPackets--;
                     }
+                    parallelSend = allReceived ? parallelSend << 1 : 1;
                 }
             }
 
@@ -324,16 +330,6 @@ public class Client
         return true;
     }
 
-    private void connectionReset() throws IOException
-    {
-        System.out.println("LOG> Resetando conexao sequencia: " + sequence);
-        sequence = 0;
-        // envia mensagem de RST
-        sendMessage = new Message(CommandType.RST, sequence);
-        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-        sendPacket.setData(sendData);
-        socket.send(sendPacket);
-    }
 
     private boolean finallizeConnection()
     {

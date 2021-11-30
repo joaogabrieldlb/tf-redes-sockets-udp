@@ -16,7 +16,7 @@ public class Message implements Serializable
         this.sequence = sequence;
     }
     
-    public Message(CommandType command, int sequence, byte[] data)
+    public Message(CommandType command, long sequence, byte[] data)
     {
         this.command = command;
         this.sequence = sequence;
