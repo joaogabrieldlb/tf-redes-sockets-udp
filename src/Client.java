@@ -246,10 +246,11 @@ public class Client
             {
                 for (int parallelSend = 1; parallelSend <= remainingPackets && parallelSend <= 32 /* Integer.MAX_VALUE */; )
                 {
-                    System.out.println("================> parallelSend: " + parallelSend);
                     int availableReads = cachedBuffers.size();
                     byte[] buffer = new byte[FILE_BUFFER_SIZE];
-
+                    System.out.println("================> parallelSend: " + parallelSend);
+                    System.out.println("================> availableReads: " + availableReads);
+                    
                     // coloca em cache os buffers necessarios para envio dos pacotes
                     while ((bytesRead = inputStream.read(buffer)) != -1 && availableReads < parallelSend) {
                         // tratamento do buffer para o último pacote
@@ -260,6 +261,7 @@ public class Client
                         cachedBuffers.add(buffer);
                         availableReads++;
                     }
+                    System.out.println("================> availableReads: " + availableReads);
                 
                     long initialSequence = sequence;
 
@@ -286,7 +288,7 @@ public class Client
                         {
                             System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de DATA.");
                             allReceived = false;
-                            sequence = initialSequence + confirmedSends;
+                            sequence = initialSequence;
                             break;
                         }
                         System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Confirmacao de recebimento do pacote #" + ++packetNumber + " de " + fileInfo.getTotalPackets() + " pelo servidor.");

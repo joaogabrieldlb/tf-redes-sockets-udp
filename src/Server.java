@@ -8,14 +8,20 @@ import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 
 
 public class Server 
 {
-    private final int PORT;
+    private static final String DEFAULT_FOLDER = "./Files/";
     private static int fileBufferSize = 512;  
+
+    private final int PORT;
     private long sequence = 0;
     private FileInfo fileInfo;
     private DatagramSocket socket;
@@ -29,13 +35,17 @@ public class Server
     private InetAddress clientAddress;
     private int clientPort;
 
-    public Server(int port) throws InvalidParameterException
+    public Server(int port) throws InvalidParameterException, IOException
     {
         if(port < 0 || port > 65536)
         {
             throw new InvalidParameterException("Porta deve estar entre 0 e 65536.");
         }
         this.PORT = port;
+        if (!Files.isDirectory(Paths.get(DEFAULT_FOLDER)))
+        {
+            Files.createDirectory(Paths.get(DEFAULT_FOLDER));
+        }
     }
 
     private boolean establishConnection() throws IOException
@@ -129,7 +139,7 @@ public class Server
         System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> FileInfo recebido com sucesso.");
         fileInfo = (FileInfo) ObjectConverter.convertBytesToObject(receiveMessage.getData());
         fileBufferSize = fileInfo.getFileBufferSize();
-        fileInfo.setFileName("./Files/" + fileInfo.getFileName());
+        fileInfo.setFileName(DEFAULT_FOLDER + fileInfo.getFileName());
 
         // envia mensagem ACK para o client
         sendMessage = new Message(CommandType.ACK, sequence);
