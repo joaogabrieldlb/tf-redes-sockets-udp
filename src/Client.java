@@ -1,3 +1,4 @@
+
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -232,7 +233,7 @@ public class Client
         System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Recebida confirmacao do FileInfo.");
 
         //envia dados do arquivo
-        // socket.setSoTimeout(SOCKET_TIMEOUT);
+        socket.setSoTimeout(SOCKET_TIMEOUT);
         try (InputStream inputStream = new BufferedInputStream(new FileInputStream(file)))
         {
             List<byte[]> cachedBuffers = new ArrayList<>();
@@ -244,21 +245,26 @@ public class Client
 
             while (remainingPackets > 0)
             {
-                for (int parallelSend = 1; parallelSend <= remainingPackets && parallelSend <= 32 /* Integer.MAX_VALUE */; )
+                for (int parallelSend = 1; remainingPackets > 0 && parallelSend <= 128; )
                 {
+                    if(parallelSend > remainingPackets)
+                    {
+                        parallelSend = (int) remainingPackets;
+                    }
+                
                     int availableReads = cachedBuffers.size();
                     byte[] buffer = new byte[FILE_BUFFER_SIZE];
+                    System.out.println("================> remainingPackets: " + remainingPackets);
                     System.out.println("================> parallelSend: " + parallelSend);
-                    System.out.println("================> availableReads: " + availableReads);
                     
                     // coloca em cache os buffers necessarios para envio dos pacotes
-                    while ((bytesRead = inputStream.read(buffer)) != -1 && availableReads < parallelSend) {
+                    while (availableReads < parallelSend && (bytesRead = inputStream.read(buffer)) != -1) {
                         // tratamento do buffer para o último pacote
                         if (bytesRead < FILE_BUFFER_SIZE)
                         {
                             buffer = Arrays.copyOf(buffer, bytesRead);
                         }
-                        cachedBuffers.add(buffer);
+                        cachedBuffers.add(buffer.clone());
                         availableReads++;
                     }
                     System.out.println("================> availableReads: " + availableReads);
@@ -272,6 +278,7 @@ public class Client
                         sendData = ObjectConverter.convertObjectToBytes(sendMessage);
                         sendPacket.setData(sendData);
                         socket.send(sendPacket);
+                        System.out.println("s#: " + sequence);
                     }
 
                     boolean allReceived = true;
@@ -299,8 +306,6 @@ public class Client
                     parallelSend = allReceived ? parallelSend << 1 : 1;
                 }
             }
-
-            
         } catch (Exception e) {
             System.out.println("excecao?");
         }
@@ -395,7 +400,7 @@ public class Client
 
     public static void main(String[] args)
     {
-        args = new String[]{ "localhost", "1234", "teste.png" };
+        args = new String[]{ "localhost", "1234", "teste.pdf" };
         if(args.length != 3)
         {
             printHelp();
