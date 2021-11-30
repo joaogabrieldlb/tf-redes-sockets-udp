@@ -12,11 +12,15 @@ import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.InvalidParameterException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Queue;
 
 public class Client 
 {
     private static final int FILE_BUFFER_SIZE = 512;
+    private static final int SOCKET_TIMEOUT = 500;
 
     private final int SERVER_PORT;
     private InetAddress serverIpAddress;
@@ -75,10 +79,10 @@ public class Client
 
             if(!(receiveMessage.getCommand() == CommandType.SYN_ACK && receiveMessage.getSequence() == sequence))
             {
-                System.out.println("Conexao nao estabelecida.");
+                System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao nao estabelecida.");
                 return false;
             }
-            System.out.println("Conexao do servidor recebida com sucesso.");
+            System.out.println("S#" + sequence + " " + receiveMessage.getCommand().name() + "> Conexao do servidor recebida com sucesso.");
 
             // envia mensagem ACK para o server
             sendMessage = new Message(CommandType.ACK, sequence);
@@ -86,7 +90,7 @@ public class Client
             sendPacket.setData(sendData);
             socket.send(sendPacket);
 
-            System.out.println("Conexao estabelecida com sucesso.");
+            System.out.println("LOG> Conexao estabelecida com sucesso.");
             return true;
         }
         catch (IOException e)
@@ -100,7 +104,7 @@ public class Client
     {
         if (!Files.isReadable(Paths.get(this.fileName)))
         {
-            System.out.println("Arquivo nao encontrado.");
+            System.out.println("LOG_ERRO> Arquivo nao encontrado.");
             return false;
         }
         final File file = Paths.get(this.fileName).toFile();
@@ -121,17 +125,18 @@ public class Client
 
         if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
         {
-            System.out.println("Conexao perdida no envio de FileInfo.");
+            System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de FileInfo.");
             connectionReset();
             return false;
         }
+        System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Recebida confirmacao do FileInfo.");
 
         //envia dados do arquivo
         try (InputStream inputStream = new BufferedInputStream(new FileInputStream(file)))
         {
             byte[] buffer = new byte[FILE_BUFFER_SIZE];
 
-            int i = 0;
+            int i = 1;
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 // tratamento do buffer para o último pacote
@@ -145,7 +150,6 @@ public class Client
                 sendData = ObjectConverter.convertObjectToBytes(sendMessage);
                 sendPacket.setData(sendData);
                 socket.send(sendPacket);
-                System.out.println("Realizado envio do pacote " + i + "/" + fileInfo.getTotalPackets() + ".");
 
                 // recebe mensagem de ACK
                 receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -155,11 +159,11 @@ public class Client
 
                 if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
                 {
-                    System.out.println("Conexao perdida no envio de DATA.");
+                    System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de DATA.");
                     connectionReset();
                     return false;
                 }
-                System.out.println("Confirmaçao de recebimento do pacote " + i + "/" + fileInfo.getTotalPackets() + " pelo server.");
+                System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Confirmacao de recebimento do pacote #" + i + " de " + fileInfo.getTotalPackets() + " pelo servidor.");
                 i++;
             }
         }
@@ -173,12 +177,143 @@ public class Client
 
         if(!((result == CommandType.SUCCESS || result == CommandType.FAILURE ) && receiveMessage.getSequence() == ++sequence))
         {
-            System.out.println("Conexao perdida no envio do arquivo.");
+            System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio do arquivo.");
             // connectionReset();
             return false;
         }
 
-        System.out.println("Envio do arquivo concluído com status: " + result.name());
+        System.out.println("S#" + receiveMessage.getSequence() + " " + result.name() + "> Recebido status do envio do arquivo: " + result.name());
+
+        // envia mensagem ACK para o server
+        sendMessage = new Message(CommandType.ACK, sequence);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
+        
+        return true;
+    }
+    
+    private boolean sendFileSlowStart() throws IOException
+    {
+        if (!Files.isReadable(Paths.get(this.fileName)))
+        {
+            System.out.println("LOG_ERRO> Arquivo nao encontrado.");
+            return false;
+        }
+        final File file = Paths.get(this.fileName).toFile();
+
+        // envia informacoes do arquivo (FileInfo)
+        FileInfo fileInfo = new FileInfo(file, FILE_BUFFER_SIZE);
+        byte[] sendFileInfo = ObjectConverter.convertObjectToBytes(fileInfo);
+        sendMessage = new Message(CommandType.UPLOAD, ++sequence, sendFileInfo);
+        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+        sendPacket.setData(sendData);
+        socket.send(sendPacket);
+
+        // recebe mensagem de ACK
+        receivePacket = new DatagramPacket(receiveData, receiveData.length);
+        socket.receive(receivePacket);
+        receiveData = receivePacket.getData();
+        receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+        if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+        {
+            System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de FileInfo.");
+            connectionReset();
+            return false;
+        }
+        System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Recebida confirmacao do FileInfo.");
+
+        //envia dados do arquivo
+        // socket.setSoTimeout(SOCKET_TIMEOUT);
+        try (InputStream inputStream = new BufferedInputStream(new FileInputStream(file)))
+        {
+            byte[][] cachedBuffers;
+
+            long packetNumber = 1;
+            int bytesRead;
+            long remainingPackets = fileInfo.getTotalPackets();
+
+            while (remainingPackets > 0)
+            {
+                for (int parallelSend = 1; parallelSend <= remainingPackets || parallelSend <= Integer.MAX_VALUE; )
+                {
+                    cachedBuffers = new byte[parallelSend][];
+                    int reads = 0;
+                    byte[] buffer = new byte[FILE_BUFFER_SIZE];
+
+                    // coloca em cache os buffers necessarios para envio dos pacotes
+                    while ((bytesRead = inputStream.read(buffer)) != -1 && reads < parallelSend) {
+                        // tratamento do buffer para o último pacote
+                        if (bytesRead < FILE_BUFFER_SIZE)
+                        {
+                            buffer = Arrays.copyOf(buffer, bytesRead);
+                        }
+                        System.out.println("parallelsend: " + parallelSend);
+                        System.out.println("reads: " + reads);
+                        System.out.println("cachedBuffers: " + cachedBuffers.length);
+                        cachedBuffers[reads] = buffer;
+                        reads++;
+                    }
+                
+                    long initialSequence = sequence;
+
+                    for (int sends = 0; sends < reads; sends++)
+                    {
+                        // envia pacote DATA
+                        sendMessage = new Message(CommandType.DATA, ++sequence, cachedBuffers[sends]);
+                        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+                        sendPacket.setData(sendData);
+                        socket.send(sendPacket);
+                    }
+
+                    int lastConfirmedSend = 0;
+
+                    for (int confirmedSends = 0; confirmedSends < reads; confirmedSends++)
+                    {
+                        // recebe mensagem de ACK
+                        receivePacket = new DatagramPacket(receiveData, receiveData.length);
+                        socket.receive(receivePacket);
+                        receiveData = receivePacket.getData();
+                        receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+                        if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+                        {
+                            System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio de DATA.");
+                            parallelSend = 1;
+                            connectionReset();
+                            break;
+                        }
+                        System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Confirmacao de recebimento do pacote #" + confirmedSends + " de " + fileInfo.getTotalPackets() + " pelo servidor.");
+                        parallelSend *= 2;
+                        lastConfirmedSend++;
+                        remainingPackets--;
+                    }
+                }
+            }
+
+            
+        } catch (Exception e) {
+            System.out.println("excecao?");
+        }
+
+        socket.setSoTimeout(0);
+
+        // aguarda status do envio do arquivo
+        receivePacket = new DatagramPacket(receiveData, receiveData.length);
+        socket.receive(receivePacket);
+        receiveData = receivePacket.getData();
+        receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+        CommandType result = receiveMessage.getCommand();
+
+        if(!((result == CommandType.SUCCESS || result == CommandType.FAILURE ) && receiveMessage.getSequence() == ++sequence))
+        {
+            System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no envio do arquivo.");
+            // connectionReset();
+            return false;
+        }
+
+        System.out.println("S#" + receiveMessage.getSequence() + " " + result.name() + "> Recebido status do envio do arquivo: " + result.name());
 
         // envia mensagem ACK para o server
         sendMessage = new Message(CommandType.ACK, sequence);
@@ -191,7 +326,7 @@ public class Client
 
     private void connectionReset() throws IOException
     {
-        System.out.println("Resetando conexao sequencia: " + sequence);
+        System.out.println("LOG> Resetando conexao sequencia: " + sequence);
         sequence = 0;
         // envia mensagem de RST
         sendMessage = new Message(CommandType.RST, sequence);
@@ -218,10 +353,10 @@ public class Client
 
             if(!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
             {
-                System.out.println("Falha no encerramento da conexao.");
+                System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Falha no encerramento da conexao.");
                 return false;
             }
-            System.out.println("Pedido de encerramento para o servidor recebida pelo servidor.");
+            System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Confirmacao do recebimento do pedido de encerramento pelo <client>.");
 
             // recebe mensagem de FIN
             receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -231,10 +366,10 @@ public class Client
 
             if(!(receiveMessage.getCommand() == CommandType.FIN && receiveMessage.getSequence() == ++sequence))
             {
-                System.out.println("Falha no encerramento da conexao.");
+                System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Falha no encerramento da conexao.");
                 return false;
             }
-            System.out.println("Pedido de encerramento do servidor recebida com sucesso.");
+            System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Pedido de encerramento da conexao recebido do <server>.");
 
             // envia mensagem ACK para o server
             sendMessage = new Message(CommandType.ACK, sequence);
@@ -242,8 +377,9 @@ public class Client
             sendPacket.setData(sendData);
             socket.send(sendPacket);
 
-            System.out.println("Conexao encerrada com sucesso.");
+            System.out.println("LOG> Conexao encerrada com sucesso.");
             return true;
+
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -256,11 +392,12 @@ public class Client
     
     private static void printHelp()
     {
-        System.out.println("Usage: Client <server IP address> <port> <filename>");
+        System.out.println("Uso do programa: Client <server IP address> <port> <filename>");
     }
 
     public static void main(String[] args)
     {
+        args = new String[]{ "localhost", "1234", "teste.png" };
         if(args.length != 3)
         {
             printHelp();
@@ -271,7 +408,8 @@ public class Client
         {
             Client client = new Client(args);
             client.estabilishConnection();
-            client.sendFile();
+            // client.sendFile();
+            client.sendFileSlowStart();
             client.finallizeConnection();
         }
         catch(Exception e)

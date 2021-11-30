@@ -29,7 +29,7 @@ public class ObjectConverter
 		InputStream is = new ByteArrayInputStream(bytes);
 		try (ObjectInputStream ois = new ObjectInputStream(is)) 
         {
-			return (Message) ois.readObject();
+			return ois.readObject();
 		} 
         catch (IOException | ClassNotFoundException ioe) 
         {

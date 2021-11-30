@@ -20,7 +20,7 @@ public class FileInfo implements Serializable
     {
         try
         {
-            if (!Files.isReadable(Paths.get(fileName)))
+            if (!Files.isReadable(file.toPath()))
             {
                 System.out.println("Arquivo não encontrado.");
                 return;
@@ -36,6 +36,10 @@ public class FileInfo implements Serializable
         {
             e.printStackTrace();
         }
+    }
+
+    public int getFileBufferSize() {
+        return fileBufferSize;
     }
 
     public long getTotalPackets() {
