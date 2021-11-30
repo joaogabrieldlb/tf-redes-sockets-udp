@@ -17,8 +17,8 @@ import java.util.List;
 
 public class Client 
 {
-    private static final int FILE_BUFFER_SIZE = 512;
     private static final int SOCKET_TIMEOUT = 500;
+    private static final int FILE_BUFFER_SIZE = 512;
 
     private final int SERVER_PORT;
     private InetAddress serverIpAddress;
@@ -400,7 +400,6 @@ public class Client
 
     public static void main(String[] args)
     {
-        args = new String[]{ "localhost", "1234", "teste.pdf" };
         if(args.length != 3)
         {
             printHelp();

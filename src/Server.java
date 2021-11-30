@@ -1,5 +1,3 @@
-
-
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -8,17 +6,15 @@ import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 
-
 public class Server 
 {
     private static final String DEFAULT_FOLDER = "./Files/";
+    private static final int SOCKET_TIMEOUT = 500;
     private static int fileBufferSize = 512;  
 
     private final int PORT;
@@ -115,13 +111,32 @@ public class Server
     
     private void connectionReset(long sequence) throws IOException
     {
-        System.out.println("LOG> Resetando conexao sequencia: " + sequence);
-        this.sequence = sequence;
-        // envia mensagem de RST
-        sendMessage = new Message(CommandType.RST, sequence);
-        sendData = ObjectConverter.convertObjectToBytes(sendMessage);
-        sendPacket.setData(sendData);
-        socket.send(sendPacket);
+        while (true)
+        {
+            System.out.println("LOG> Resetando conexao para sequencia: " + sequence);
+            this.sequence = sequence;
+            // envia mensagem de RST
+            sendMessage = new Message(CommandType.RST, sequence);
+            sendData = ObjectConverter.convertObjectToBytes(sendMessage);
+            sendPacket.setData(sendData);
+            socket.send(sendPacket);
+
+            // aguardando o recebimento do ACK
+            socket.setSoTimeout(SOCKET_TIMEOUT);
+            receivePacket = new DatagramPacket(receiveData, receiveData.length);
+            socket.receive(receivePacket);
+            receiveData = receivePacket.getData();
+            receiveMessage = (Message) ObjectConverter.convertBytesToObject(receiveData);
+
+            // valida se a menssagem recebida nao e ACK ou se nao e o numero de sequencia esperado
+            if (!(receiveMessage.getCommand() == CommandType.ACK && receiveMessage.getSequence() == sequence))
+            {
+                System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Confirmacao de reset invalido.");
+                continue;
+            }
+            break;
+        }
+        socket.setSoTimeout(0);
     }
 
     private boolean receiveFile() throws IOException, NoSuchAlgorithmException
@@ -250,7 +265,7 @@ public class Server
             if(!(receiveMessage.getCommand() == CommandType.DATA && receiveMessage.getSequence() == ++sequence))
             {
                 System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Conexao perdida no recebimento dos dados do arquivo.");
-                connectionReset(0);
+                connectionReset(sequence);
                 return false;
             }
             System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Pacote #" + i + " de " + fileInfo.getTotalPackets() + " recebido.");
@@ -305,8 +320,6 @@ public class Server
 
         return result;
     }
-
-
 
     private boolean finallizeConnection(boolean status)
     {
@@ -383,7 +396,7 @@ public class Server
             status = server.establishConnection();
             if (status)
             {
-                status = server.receiveFile();
+                status = server.receiveFileSlowStart();
                 server.finallizeConnection(status);
             }
         }
