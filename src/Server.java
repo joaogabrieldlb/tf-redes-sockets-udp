@@ -396,7 +396,8 @@ public class Server
             status = server.establishConnection();
             if (status)
             {
-                status = server.receiveFileSlowStart();
+                status = server.receiveFile();
+                // status = server.receiveFileSlowStart();
                 server.finallizeConnection(status);
             }
         }
@@ -405,7 +406,6 @@ public class Server
             e.printStackTrace();
         }
     }
-
 }
 
 

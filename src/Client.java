@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -232,8 +233,8 @@ public class Client
         }
         System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Recebida confirmacao do FileInfo.");
 
-        //envia dados do arquivo
-        socket.setSoTimeout(SOCKET_TIMEOUT);
+        // envia dados do arquivo
+        // socket.setSoTimeout(SOCKET_TIMEOUT);
         try (InputStream inputStream = new BufferedInputStream(new FileInputStream(file)))
         {
             List<byte[]> cachedBuffers = new ArrayList<>();
@@ -241,12 +242,13 @@ public class Client
             long packetNumber = 0;
             int bytesRead;
             long remainingPackets = fileInfo.getTotalPackets();
-            int lastConfirmedSend = 0;
 
             while (remainingPackets > 0)
             {
-                for (int parallelSend = 1; remainingPackets > 0 && parallelSend <= 128; )
+                // implementa o Slow Start
+                for (int parallelSend = 1; remainingPackets > 0 && parallelSend <= 64; )
                 {
+                    // permite que no ultimo envio sejam enviados todos os pacotes remanescentes sem resetar o slowstart
                     if(parallelSend > remainingPackets)
                     {
                         parallelSend = (int) remainingPackets;
@@ -254,8 +256,6 @@ public class Client
                 
                     int availableReads = cachedBuffers.size();
                     byte[] buffer = new byte[FILE_BUFFER_SIZE];
-                    System.out.println("================> remainingPackets: " + remainingPackets);
-                    System.out.println("================> parallelSend: " + parallelSend);
                     
                     // coloca em cache os buffers necessarios para envio dos pacotes
                     while (availableReads < parallelSend && (bytesRead = inputStream.read(buffer)) != -1) {
@@ -267,7 +267,6 @@ public class Client
                         cachedBuffers.add(buffer.clone());
                         availableReads++;
                     }
-                    System.out.println("================> availableReads: " + availableReads);
                 
                     long initialSequence = sequence;
 
@@ -278,7 +277,6 @@ public class Client
                         sendData = ObjectConverter.convertObjectToBytes(sendMessage);
                         sendPacket.setData(sendData);
                         socket.send(sendPacket);
-                        System.out.println("s#: " + sequence);
                     }
 
                     boolean allReceived = true;
@@ -298,16 +296,20 @@ public class Client
                             sequence = initialSequence;
                             break;
                         }
+                        else if (receiveMessage.getCommand() == CommandType.RST)
+                        {
+                            
+                        }
+            
                         System.out.println("S#" + receiveMessage.getSequence()  + " " + receiveMessage.getCommand().name() + "> Confirmacao de recebimento do pacote #" + ++packetNumber + " de " + fileInfo.getTotalPackets() + " pelo servidor.");
                         cachedBuffers.remove(0);
-                        lastConfirmedSend++;
                         remainingPackets--;
                     }
                     parallelSend = allReceived ? parallelSend << 1 : 1;
                 }
             }
-        } catch (Exception e) {
-            System.out.println("excecao?");
+        } catch (SocketTimeoutException e) {
+            System.out.println("ERRO> timeout");
         }
 
         socket.setSoTimeout(0);
@@ -372,6 +374,7 @@ public class Client
                 System.out.println("ERRO> <S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Falha no encerramento da conexao.");
                 return false;
             }
+
             System.out.println("S#" + receiveMessage.getSequence() + " " + receiveMessage.getCommand().name() + "> Pedido de encerramento da conexao recebido do <server>.");
 
             // envia mensagem ACK para o server
