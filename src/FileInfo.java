@@ -1,15 +1,12 @@
-
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class FileInfo implements Serializable
 {
-    //private Path filePath;
     private int fileBufferSize;
     private String fileName;
     private long fileSize;
